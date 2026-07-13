@@ -26,7 +26,28 @@
     if (reportBtn) {
       reportBtn.addEventListener('click', function () {
         if (!page.projectId) return;
-        window.open('/api/projects/' + page.projectId + '/runs/' + page.runId + '/report', '_blank');
+        var reportWindow = window.open('', '_blank');
+        if (!reportWindow) {
+          window.App.utils.showToast('浏览器阻止了报告窗口', 'error');
+          return;
+        }
+        var token = localStorage.getItem('token');
+        fetch('/api/projects/' + page.projectId + '/runs/' + page.runId + '/report', {
+          headers: token ? { 'Authorization': 'Bearer ' + token } : {},
+        })
+          .then(function (resp) {
+            if (!resp.ok) throw new Error('生成报告失败 (' + resp.status + ')');
+            return resp.text();
+          })
+          .then(function (html) {
+            reportWindow.document.open();
+            reportWindow.document.write(html);
+            reportWindow.document.close();
+          })
+          .catch(function (err) {
+            reportWindow.close();
+            window.App.utils.showToast(err.message || '生成报告失败', 'error');
+          });
       });
     }
   };
