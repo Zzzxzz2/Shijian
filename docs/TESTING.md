@@ -28,4 +28,4 @@
 
 ## CI
 
-GitHub Actions 执行后端模块测试、Python 编译、React clean build 和 Compose 配置检查。需要启动真实浏览器与服务的 E2E 保留为本地/发布门禁，避免普通提交依赖外部端口。
+GitHub Actions 执行后端模块测试、Python 编译、React clean build、Compose 配置检查和三服务镜像构建。需要启动真实浏览器与服务的 E2E 保留为本地/发布门禁，避免普通提交依赖外部端口。

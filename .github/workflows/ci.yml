@@ -33,3 +33,4 @@ jobs:
 
       - run: cp .env.example .env
       - run: docker compose config -q
+      - run: docker compose build
