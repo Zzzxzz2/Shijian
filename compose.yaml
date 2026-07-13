@@ -28,7 +28,7 @@ services:
   target-system:
     build: ./target-system
     ports:
-      - "8003:8003"
+      - "127.0.0.1:8003:8003"
     restart: unless-stopped
 
 volumes:

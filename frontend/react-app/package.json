@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:spa-css": "tailwindcss -c tailwind.spa.config.js -i ../tailwind.input.css -o ../assets/tailwind.css --minify",
     "preview": "vite preview"
   },
   "dependencies": {

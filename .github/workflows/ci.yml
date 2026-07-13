@@ -30,6 +30,9 @@ jobs:
         run: npm ci
       - working-directory: frontend/react-app
         run: npm run build
+      - working-directory: frontend/react-app
+        run: npm run build:spa-css
+      - run: git diff --exit-code -- frontend/assets/tailwind.css
 
       - run: cp .env.example .env
       - run: docker compose config -q

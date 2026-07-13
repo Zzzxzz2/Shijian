@@ -126,6 +126,7 @@ python -m pytest -q --ignore=tests/e2e
 # React 构建
 cd frontend\react-app
 npm ci
+npm run build:spa-css
 npm run build
 
 # 自包含 E2E：先启动 8000 与 8003
@@ -145,7 +146,8 @@ python tests/e2e_regression.py
 - `ENV=production` 时必须提供 JWT secret 和 32 字节 AES Key，否则应用明确拒绝相关不安全配置。
 - 旧开发目录中曾出现过 QQ SMTP 授权码；该授权已由所有者撤销。本公共目录从未包含该值。
 - 邮件功能默认关闭。需要时只在本地或部署环境的 `.env` 中设置 `QQ_*` 变量，严禁提交授权码。
-- 演示靶场故意包含可测试的错误与安全场景，不应暴露到公网。
+- 演示靶场故意包含可测试的错误与安全场景；Compose 默认只绑定 `127.0.0.1:8003`，不得改为公网监听。
+- 原生 SPA 使用仓库内生成的 `frontend/assets/tailwind.css`，不在运行时加载第三方 CSS 脚本。
 
 详见 [SECURITY.md](SECURITY.md)。
 

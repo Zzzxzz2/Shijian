@@ -5,7 +5,7 @@
 | 层级 | 命令 | 外部依赖 |
 |---|---|---|
 | 后端模块 | `python -m pytest -q --ignore=tests/e2e` | 无；每进程独立临时 SQLite |
-| React 构建 | `npm ci && npm run build` | Node 22 |
+| 前端构建 | `npm ci && npm run build:spa-css && npm run build` | Node 22；同时验证原生 SPA CSS 与 React |
 | 主 E2E | `python run_e2e.py` | 本仓库 backend:8000 + target:8003 |
 | 扩展回归 | `python tests/e2e_regression.py` | backend:8000 |
 | 浏览器流程 | `python -m pytest tests/e2e -q` | backend:8000、Chromium；按需运行 |

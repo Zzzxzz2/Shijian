@@ -22,7 +22,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 ```ini
 QQ_ALERT_EMAIL=receiver@example.com
 QQ_SMTP_USER=sender@qq.com
-QQ_SMTP_AUTH_CODE=your-new-local-only-code
+QQ_SMTP_AUTH_CODE=  # 仅在服务器 .env 中填写新授权码
 QQ_SMTP_HOST=smtp.qq.com
 QQ_SMTP_PORT=587
 ```
@@ -44,7 +44,7 @@ curl http://127.0.0.1:8003/
 |---|---:|---|
 | backend + 原生 SPA | 8000 | `shijian-data`、uploads、screenshots volumes |
 | React 报告页 | 5173 | 无状态静态文件 |
-| 演示靶场 | 8003 | 仅用于测试，不应公网暴露 |
+| 演示靶场 | 127.0.0.1:8003 | 仅用于本机测试，Compose 不对外网监听 |
 
 ## 首次初始化
 
@@ -57,7 +57,7 @@ curl http://127.0.0.1:8003/
 - `/` 与 `/api`、`/ws` 代理 backend:8000。
 - `/report` 或独立子域代理 report-ui:80。
 - WebSocket 代理必须转发 Upgrade/Connection headers。
-- 不公开 8003 靶场端口。
+- 保留 Compose 中的 `127.0.0.1:8003:8003` 绑定，不公开靶场端口。
 
 ## 更新与备份
 
