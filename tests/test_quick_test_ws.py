@@ -1,11 +1,10 @@
 """验剑策略：即时执行（Quick Test）— WebSocket 层（QT-002~004, 103~105, 201~206, 302~303）
 
-WS 测试使用 threading + asyncio.run() 在后台线程中运行 broadcast 协程，
-避免同步 TestClient 无事件循环的问题。
+WS 测试通过 TestClient portal 在应用事件循环中运行 broadcast 协程，
+避免跨事件循环操作 WebSocket。
 """
 
 import asyncio
-import threading
 import time as _time
 
 import pytest
@@ -25,7 +24,7 @@ def _token(sub: str = "1") -> str:
     return create_access_token({"sub": sub})
 
 
-def _start_task_qt(task_id: str, messages: list[dict],
+def _start_task_qt(sync_client: TestClient, task_id: str, messages: list[dict],
                    delay_per_msg: float = 0.01,
                    delay_before: float = 0.1):
     """Register a task in ``_tasks`` and start a background thread that
@@ -35,9 +34,8 @@ def _start_task_qt(task_id: str, messages: list[dict],
     broadcast, preventing a race where messages are sent before the
     client is listening.
 
-    Uses a daemon thread with its own event loop so sync ``TestClient``
-    tests can drive WS connections without needing a running event loop
-    in the main thread.
+    Uses the ``TestClient`` portal so broadcasts and WebSocket sends run
+    on the same event loop as the application.
     """
     _tasks[task_id] = {
         "task_id": task_id,
@@ -60,9 +58,8 @@ def _start_task_qt(task_id: str, messages: list[dict],
             _tasks[task_id]["status"] = "failed"
             _tasks[task_id]["error"] = str(exc)
 
-    t = threading.Thread(target=asyncio.run, args=(_run(),), daemon=True)
-    t.start()
-    return t
+    assert sync_client.portal is not None
+    return sync_client.portal.start_task_soon(_run)
 
 
 def _receive_all(ws) -> list[dict]:
@@ -90,7 +87,7 @@ class TestWSMessageFlow:
         预期按序收到：
           status → case_start × N → case_done × N → done
         """
-        _start_task_qt("qt_002", [
+        _start_task_qt(sync_client, "qt_002", [
             {"type": "status", "data": "正在分析需求..."},
             {"type": "status", "data": "生成了 2 条用例"},
             {"type": "case_start", "data": {"name": "用例1", "index": 0, "total": 2, "test_type": "api"}},
@@ -136,7 +133,7 @@ class TestWSMessageFlow:
 
     def test_qt_003_all_pass(self, sync_client: TestClient):
         """验剑策略：QT-003 — 全部用例通过 → done 中 passed=total。"""
-        _start_task_qt("qt_003", [
+        _start_task_qt(sync_client, "qt_003", [
             {"type": "status", "data": "生成了 3 条用例"},
             {"type": "case_start", "data": {"name": "t1", "index": 0, "total": 3, "test_type": "api"}},
             {"type": "case_done", "data": {"index": 0, "name": "t1", "status": "pass", "duration_ms": 5, "detail": {"assertions": [{"passed": True}]}}},
@@ -168,7 +165,7 @@ class TestWSMessageFlow:
 
         失败用例 case_done.status="fail"，detail.assertions 含断言详情。
         """
-        _start_task_qt("qt_004", [
+        _start_task_qt(sync_client, "qt_004", [
             {"type": "status", "data": "生成了 2 条用例"},
             {"type": "case_start", "data": {"name": "ok", "index": 0, "total": 2, "test_type": "api"}},
             {"type": "case_done", "data": {"index": 0, "name": "ok", "status": "pass", "duration_ms": 5, "detail": {"assertions": [{"passed": True}]}}},
@@ -208,7 +205,7 @@ class TestBoundaryWS:
 
     def test_qt_103_zero_cases(self, sync_client: TestClient):
         """验剑策略：QT-103 — AI 生成 0 条用例 → done{total=0}。"""
-        _start_task_qt("qt_103", [
+        _start_task_qt(sync_client, "qt_103", [
             {"type": "status", "data": "生成了 0 条用例"},
             {"type": "done", "data": {"passed": 0, "failed": 0, "total": 0}},
         ])
@@ -226,7 +223,7 @@ class TestBoundaryWS:
 
     def test_qt_104_single_case(self, sync_client: TestClient):
         """验剑策略：QT-104 — AI 仅生成 1 条用例 → case_start/case_done 各 1。"""
-        _start_task_qt("qt_104", [
+        _start_task_qt(sync_client, "qt_104", [
             {"type": "status", "data": "生成了 1 条用例"},
             {"type": "case_start", "data": {"name": "single", "index": 0, "total": 1, "test_type": "api"}},
             {"type": "case_done", "data": {"index": 0, "name": "single", "status": "pass", "duration_ms": 5, "detail": {}}},
@@ -251,7 +248,7 @@ class TestBoundaryWS:
             msgs.append({"type": "case_done", "data": {"index": i, "name": f"c{i}", "status": "pass", "duration_ms": 1, "detail": {}}})
         msgs.append({"type": "done", "data": {"passed": 30, "failed": 0, "total": 30}})
 
-        _start_task_qt("qt_105", msgs, delay_per_msg=0.001)
+        _start_task_qt(sync_client, "qt_105", msgs, delay_per_msg=0.001)
 
         start_time = _time.monotonic()
         received = 0
@@ -281,7 +278,7 @@ class TestExceptionWS:
 
         done 消息中 failover_trace 非空。
         """
-        _start_task_qt("qt_201", [
+        _start_task_qt(sync_client, "qt_201", [
             {"type": "status", "data": "正在分析需求..."},
             {"type": "done", "data": {
                 "passed": 3, "failed": 0, "total": 3,
@@ -302,7 +299,7 @@ class TestExceptionWS:
 
     def test_qt_202_mock_fails_graceful(self, sync_client: TestClient):
         """验剑策略：QT-202 — Mock 也挂 → 优雅兜底（push error + done）。"""
-        _start_task_qt("qt_202", [
+        _start_task_qt(sync_client, "qt_202", [
             {"type": "status", "data": "正在分析需求..."},
             {"type": "error", "data": "AI 生成失败：all providers failed"},
             {"type": "done", "data": {"passed": 0, "failed": 0, "total": 0}},
@@ -320,7 +317,7 @@ class TestExceptionWS:
 
         模拟：后台协程先 push error 再 push done。
         """
-        _start_task_qt("qt_203", [
+        _start_task_qt(sync_client, "qt_203", [
             {"type": "error", "data": "任务超时"},
             {"type": "done", "data": {"passed": 0, "failed": 0, "total": 0}},
         ])
@@ -347,14 +344,14 @@ class TestExceptionWS:
             _tasks["qt_204"]["result"] = {"passed": 0, "failed": 0, "total": 0}
 
         _tasks["qt_204"] = {"task_id": "qt_204", "status": "running", "result": None, "error": None}
-        t = threading.Thread(target=asyncio.run, args=(_tracked(),), daemon=True)
-        t.start()
+        assert sync_client.portal is not None
+        task = sync_client.portal.start_task_soon(_tracked)
 
         # Connect, receive status, disconnect immediately
         with sync_client.websocket_connect(f"/ws/quick-test/qt_204?token={_token()}") as ws:
             ws.receive_json()  # status: running
         # Disconnected — wait for backend
-        t.join(timeout=3)
+        task.result(timeout=3)
         assert backend_done["flag"], "后台应在客户端断开后继续执行"
         assert _tasks.get("qt_204", {}).get("status") == "done"
 
@@ -372,9 +369,8 @@ class TestExceptionWS:
             _tasks["qt_205"]["result"] = {"passed": 1, "failed": 0, "total": 1}
 
         _tasks["qt_205"] = {"task_id": "qt_205", "status": "running", "result": None, "error": None}
-        t = threading.Thread(target=asyncio.run, args=(_quick(),), daemon=True)
-        t.start()
-        t.join(timeout=2)
+        assert sync_client.portal is not None
+        sync_client.portal.start_task_soon(_quick).result(timeout=2)
 
         # Connect after task is done
         with sync_client.websocket_connect(f"/ws/quick-test/qt_205?token={_token()}") as ws:
@@ -401,9 +397,8 @@ class TestAuthWS:
             _tasks["qt_302"]["status"] = "done"
 
         _tasks["qt_302"] = {"task_id": "qt_302", "status": "running", "result": None, "error": None}
-        t = threading.Thread(target=asyncio.run, args=(_dummy(),), daemon=True)
-        t.start()
-        t.join(timeout=1)
+        assert sync_client.portal is not None
+        sync_client.portal.start_task_soon(_dummy).result(timeout=1)
 
         with pytest.raises(Exception):
             with sync_client.websocket_connect("/ws/quick-test/qt_302") as ws:
@@ -415,9 +410,8 @@ class TestAuthWS:
             _tasks["qt_303"]["status"] = "done"
 
         _tasks["qt_303"] = {"task_id": "qt_303", "status": "running", "result": None, "error": None}
-        t = threading.Thread(target=asyncio.run, args=(_dummy(),), daemon=True)
-        t.start()
-        t.join(timeout=1)
+        assert sync_client.portal is not None
+        sync_client.portal.start_task_soon(_dummy).result(timeout=1)
 
         with pytest.raises(Exception):
             with sync_client.websocket_connect("/ws/quick-test/qt_303?token=invalid_jwt") as ws:

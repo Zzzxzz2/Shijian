@@ -18,8 +18,7 @@ jobs:
 
       - run: pip install -r requirements-dev.txt
       - run: python -m compileall -q backend target-system run_e2e.py
-      - run: python -m pytest -vv -o faulthandler_timeout=60 --ignore=tests/e2e
-        timeout-minutes: 5
+      - run: python -m pytest -q -o faulthandler_timeout=60 --ignore=tests/e2e
 
       - uses: actions/setup-node@v4
         with:
