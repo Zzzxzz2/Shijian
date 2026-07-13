@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>试剑 V2</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { theme: { extend: { colors: { primary: { 50: '#eff6ff', 100: '#dbeafe', 200: '#bfdbfe', 300: '#93c5fd', 400: '#60a5fa', 500: '#3b82f6', 600: '#2563eb', 700: '#1d4ed8', 800: '#1e40af', 900: '#1e3a8a' } } } } };
+  </script>
+</head>
+<body class="bg-gray-50 text-gray-800 min-h-screen">
+  <!-- Nav -->
+  <nav id="nav" class="hidden bg-white shadow-sm border-b border-gray-200">
+    <div class="max-w-7xl mx-auto px-4 h-14 flex items-center justify-between">
+      <a href="#/projects" class="text-lg font-bold text-primary-600 hover:text-primary-700 transition-colors">试剑</a>
+      <div class="flex items-center gap-3">
+        <a id="nav-api-keys" href="#/api-keys" class="text-sm text-gray-500 hover:text-primary-600 transition-colors">API Key 管理</a>
+        <a id="admin-link" href="#/admin" class="text-sm text-gray-500 hover:text-primary-600 transition-colors hidden">管理面板</a>
+        <a id="nav-profile" href="#/profile" class="text-sm text-gray-500 hover:text-primary-600 transition-colors">个人中心</a>
+        <a id="nav-token-stats" href="#/token-stats" class="text-sm text-gray-500 hover:text-primary-600 transition-colors">Token 统计</a>
+        <span class="text-gray-300">|</span>
+        <span id="user-info" class="text-sm text-gray-600"></span>
+        <a id="nav-login" href="#" onclick="window.App.auth.logout(); window.location.hash='#/login'; return false;" class="text-sm text-primary-600 hover:text-primary-700 transition-colors hidden">登录</a>
+        <button id="nav-logout" onclick="window.App.auth.logout()"
+          class="text-sm text-gray-500 hover:text-red-600 transition-colors">退出</button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main content -->
+  <main id="app"></main>
+
+  <!-- Loading overlay -->
+  <div id="loading-overlay" class="fixed inset-0 bg-black/20 hidden items-center justify-center z-50">
+    <div class="bg-white rounded-xl shadow-lg px-6 py-4 flex items-center gap-3">
+      <svg class="animate-spin h-5 w-5 text-primary-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <span class="text-sm text-gray-600">加载中...</span>
+    </div>
+  </div>
+
+  <script src="/js/api.js?v=2"></script>
+  <script src="/js/utils.js"></script>
+  <script src="/js/auth.js"></script>
+  <script src="/js/ws.js"></script>
+  <script src="/js/router.js"></script>
+  <script src="/js/page-login.js"></script>
+  <script src="/js/page-projects.js"></script>
+  <script src="/js/page-project-detail.js"></script>
+  <script src="/js/page-api-keys.js"></script>
+  <script src="/js/page-admin.js"></script>
+  <script src="/js/page-new-test.js"></script>
+  <script src="/js/page-ai-plan.js"></script>
+  <script src="/js/page-run-detail.js?v=5"></script>
+  <script src="/js/page-token-stats.js"></script>
+  <script src="/js/page-profile.js"></script>
+  <script src="/js/analytics.js"></script>
+</body>
+</html>

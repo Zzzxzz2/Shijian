@@ -1,0 +1,65 @@
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-6">
+    <a id="back-link" href="#/projects" class="text-gray-400 hover:text-gray-600 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div class="flex-1">
+      <h1 class="text-2xl font-bold text-gray-800">执行详情</h1>
+      <p id="project-name" class="text-sm text-gray-500 mt-0.5">项目：<span class="font-medium"></span></p>
+    </div>
+    <div class="flex items-center gap-2">
+      <button id="report-btn" class="px-3 py-1.5 text-sm border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg transition-colors hidden">生成报告</button>
+      <div id="status-badge" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-600">-</div>
+    </div>
+  </div>
+
+  <!-- Summary cards -->
+  <div id="summary-cards" class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <p class="text-xs text-gray-500 mb-1">用例总数</p>
+      <p id="sum-total" class="text-2xl font-bold text-gray-800">-</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <p class="text-xs text-gray-500 mb-1">通过</p>
+      <p id="sum-pass" class="text-2xl font-bold text-green-600">-</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <p class="text-xs text-gray-500 mb-1">失败</p>
+      <p id="sum-fail" class="text-2xl font-bold text-red-600">-</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+      <p class="text-xs text-gray-500 mb-1">错误</p>
+      <p id="sum-error" class="text-2xl font-bold text-yellow-600">-</p>
+    </div>
+  </div>
+
+  <!-- Timing -->
+  <div class="flex items-center gap-6 mb-6 text-sm text-gray-500">
+    <span>开始：<span id="started-at" class="text-gray-700">-</span></span>
+    <span>结束：<span id="finished-at" class="text-gray-700">-</span></span>
+    <span>耗时：<span id="total-duration" class="text-gray-700">-</span></span>
+  </div>
+
+  <!-- History diff -->
+  <div id="diff-section" class="mb-8 hidden">
+    <h2 class="text-lg font-bold text-gray-800 mb-3">历史对比</h2>
+    <div id="diff-summary" class="flex items-center gap-4 mb-3"></div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <table class="w-full text-sm">
+        <thead><tr class="bg-gray-50 border-b border-gray-100">
+          <th class="text-left px-4 py-3 font-medium text-gray-500">用例</th>
+          <th class="text-center px-4 py-3 font-medium text-gray-500">上次</th>
+          <th class="text-center px-4 py-3 font-medium text-gray-500">本次</th>
+          <th class="text-center px-4 py-3 font-medium text-gray-500">变化</th>
+        </tr></thead>
+        <tbody id="diff-list"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Case results -->
+  <div class="space-y-2" id="case-results">
+    <p class="text-center py-8 text-gray-400">加载中...</p>
+  </div>
+</div>

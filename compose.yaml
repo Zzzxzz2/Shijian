@@ -1,0 +1,37 @@
+services:
+  backend:
+    build: .
+    env_file: .env
+    environment:
+      ENV: production
+      DATABASE_URL: sqlite+aiosqlite:////data/shijian.db
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      API_KEY_ENCRYPTION_KEY: ${API_KEY_ENCRYPTION_KEY:?API_KEY_ENCRYPTION_KEY is required}
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-http://localhost:8000,http://localhost:5173}
+    ports:
+      - "8000:8000"
+    volumes:
+      - shijian-data:/data
+      - shijian-uploads:/app/backend/uploads
+      - shijian-screenshots:/app/backend/screenshots
+    restart: unless-stopped
+
+  report-ui:
+    build: ./frontend/react-app
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+  target-system:
+    build: ./target-system
+    ports:
+      - "8003:8003"
+    restart: unless-stopped
+
+volumes:
+  shijian-data:
+  shijian-uploads:
+  shijian-screenshots:

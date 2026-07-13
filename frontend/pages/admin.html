@@ -1,0 +1,39 @@
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">管理面板</h1>
+
+  <!-- Stats cards -->
+  <div id="stats-cards" class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <p class="text-sm text-gray-500 mb-1">用户总数</p>
+      <p id="stat-users" class="text-3xl font-bold text-gray-800">-</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <p class="text-sm text-gray-500 mb-1">项目总数</p>
+      <p id="stat-projects" class="text-3xl font-bold text-gray-800">-</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <p class="text-sm text-gray-500 mb-1">执行总次数</p>
+      <p id="stat-runs" class="text-3xl font-bold text-gray-800">-</p>
+    </div>
+  </div>
+
+  <!-- User management -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+      <h2 class="text-base font-semibold text-gray-700">用户管理</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-200">
+          <th class="text-left px-4 py-3 font-medium text-gray-600">用户名</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-600">角色</th>
+          <th class="text-left px-4 py-3 font-medium text-gray-600 hidden md:table-cell">注册时间</th>
+          <th class="text-center px-4 py-3 font-medium text-gray-600">操作</th>
+        </tr>
+      </thead>
+      <tbody id="user-list">
+        <tr><td colspan="4" class="text-center py-12 text-gray-400">加载中...</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>

@@ -1,0 +1,98 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Circular Refs API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/nodes": {
+      "post": {
+        "summary": "Create a tree node",
+        "operationId": "createNode",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TreeNode" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TreeNode" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nodes/{id}": {
+      "get": {
+        "summary": "Get a tree node",
+        "operationId": "getNode",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TreeNode" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/self-ref": {
+      "post": {
+        "summary": "Self-referencing linked list",
+        "operationId": "createLinkedList",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LinkedListNode" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "TreeNode": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer" },
+          "name": { "type": "string" },
+          "children": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TreeNode" }
+          }
+        }
+      },
+      "LinkedListNode": {
+        "type": "object",
+        "properties": {
+          "value": { "type": "string" },
+          "next": { "$ref": "#/components/schemas/LinkedListNode" }
+        }
+      }
+    }
+  }
+}

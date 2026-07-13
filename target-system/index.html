@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>试剑靶场 - 任务管理系统</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f7fa; color: #1a1a2e; min-height: 100vh; }
+  .container { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+  h1 { font-size: 24px; margin-bottom: 20px; color: #16213e; }
+  h2 { font-size: 18px; margin-bottom: 12px; color: #16213e; }
+
+  /* Auth */
+  .auth-box { background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,.08); max-width: 400px; margin: 40px auto; }
+  .auth-box h1 { text-align: center; }
+  .auth-toggle { text-align: center; margin-top: 16px; font-size: 14px; color: #666; }
+  .auth-toggle a { color: #4361ee; cursor: pointer; text-decoration: none; }
+  .auth-toggle a:hover { text-decoration: underline; }
+
+  .form-group { margin-bottom: 16px; }
+  .form-group label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 4px; color: #333; }
+  .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px 12px; border: 1px solid #d0d5dd; border-radius: 8px; font-size: 14px; outline: none; transition: border .2s; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: #4361ee; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
+  .form-group textarea { resize: vertical; min-height: 80px; }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; padding: 8px 20px; border: none; border-radius: 8px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all .2s; }
+  .btn-primary { background: #4361ee; color: #fff; }
+  .btn-primary:hover { background: #3651d4; }
+  .btn-primary:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-success { background: #06d6a0; color: #fff; }
+  .btn-success:hover { background: #05b88a; }
+  .btn-danger { background: #ef476f; color: #fff; }
+  .btn-danger:hover { background: #d63d62; }
+  .btn-outline { background: transparent; color: #4361ee; border: 1px solid #4361ee; }
+  .btn-outline:hover { background: #f0f3ff; }
+  .btn-sm { padding: 4px 12px; font-size: 12px; }
+  .btn-block { width: 100%; }
+
+  .error-msg { color: #ef476f; font-size: 13px; margin-top: 4px; display: none; }
+  .error-msg.show { display: block; }
+
+  /* Header */
+  .header { background: #fff; border-bottom: 1px solid #e8ecf0; padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .header-left h1 { font-size: 18px; margin: 0; }
+  .header-right { display: flex; align-items: center; gap: 12px; font-size: 14px; }
+  .user-badge { background: #eef2ff; color: #4361ee; padding: 4px 12px; border-radius: 20px; font-size: 13px; }
+
+  /* Toolbar */
+  .toolbar { display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center; }
+  .toolbar .search-input { flex: 1; min-width: 200px; padding: 10px 12px; border: 1px solid #d0d5dd; border-radius: 8px; font-size: 14px; }
+  .toolbar .search-input:focus { border-color: #4361ee; outline: none; box-shadow: 0 0 0 3px rgba(67,97,238,.15); }
+  .toolbar select { padding: 9px 12px; border: 1px solid #d0d5dd; border-radius: 8px; font-size: 14px; background: #fff; }
+
+  /* Task Cards */
+  .task-grid { display: flex; flex-direction: column; gap: 12px; }
+  .task-card { background: #fff; border-radius: 10px; padding: 16px 20px; box-shadow: 0 1px 4px rgba(0,0,0,.06); display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; transition: box-shadow .2s; }
+  .task-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,.1); }
+  .task-body { flex: 1; min-width: 0; }
+  .task-title { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+  .task-desc { font-size: 13px; color: #666; margin-bottom: 8px; }
+  .task-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+  .badge-status-todo { background: #e8ecf0; color: #555; }
+  .badge-status-doing { background: #fff3cd; color: #856404; }
+  .badge-status-done { background: #d4edda; color: #155724; }
+  .badge-status-archived { background: #e2e3e5; color: #383d41; }
+  .badge-priority-low { background: #d1e7dd; color: #0f5132; }
+  .badge-priority-medium { background: #fff3cd; color: #856404; }
+  .badge-priority-high { background: #f8d7da; color: #842029; }
+  .task-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; flex-wrap: wrap; }
+
+  /* Pagination */
+  .pagination { display: flex; justify-content: center; align-items: center; gap: 8px; margin-top: 24px; }
+  .pagination .page-btn { padding: 6px 14px; border: 1px solid #d0d5dd; border-radius: 6px; background: #fff; cursor: pointer; font-size: 14px; }
+  .pagination .page-btn:hover { background: #f0f3ff; }
+  .pagination .page-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .pagination .page-info { font-size: 14px; color: #666; }
+
+  /* Modal */
+  .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4); align-items: center; justify-content: center; z-index: 1000; }
+  .modal-overlay.show { display: flex; }
+  .modal-box { background: #fff; border-radius: 12px; padding: 28px; width: 90%; max-width: 480px; max-height: 90vh; overflow-y: auto; }
+  .modal-box h2 { margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Admin */
+  .admin-section { margin-top: 24px; }
+  .admin-section h2 { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 8px; }
+  .admin-section h2:hover { color: #4361ee; }
+  .admin-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+  .admin-table th, .admin-table td { padding: 10px 16px; text-align: left; font-size: 14px; border-bottom: 1px solid #e8ecf0; }
+  .admin-table th { background: #f8f9fc; font-weight: 600; color: #333; }
+
+  /* Toast */
+  .toast { position: fixed; top: 20px; right: 20px; padding: 12px 20px; border-radius: 8px; color: #fff; font-size: 14px; z-index: 2000; opacity: 0; transform: translateY(-10px); transition: all .3s; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast-success { background: #06d6a0; }
+  .toast-error { background: #ef476f; }
+
+  .empty-state { text-align: center; padding: 40px; color: #999; }
+  .loading-state { text-align: center; padding: 40px; color: #999; }
+
+  @media (max-width: 640px) {
+    .task-card { flex-direction: column; }
+    .task-actions { width: 100%; justify-content: flex-end; }
+    .toolbar { flex-direction: column; }
+    .toolbar .search-input { min-width: auto; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Toast -->
+<div id="toast" class="toast" data-testid="toast"></div>
+
+<!-- ======== Auth Screen ======== -->
+<div id="auth-screen" class="container" data-testid="auth-screen">
+  <div class="auth-box">
+    <h1 data-testid="auth-title">试剑靶场</h1>
+
+    <!-- Login Form -->
+    <div id="login-form" data-testid="login-form">
+      <div class="form-group">
+        <label for="login-username">用户名</label>
+        <input id="login-username" data-testid="login-username" type="text" placeholder="输入用户名">
+      </div>
+      <div class="form-group">
+        <label for="login-password">密码</label>
+        <input id="login-password" data-testid="login-password" type="password" placeholder="输入密码">
+      </div>
+      <div class="error-msg" id="login-error" data-testid="login-error"></div>
+      <button class="btn btn-primary btn-block" id="login-submit" data-testid="login-submit">登录</button>
+      <div class="auth-toggle">没有账号？<a id="show-register" data-testid="show-register">注册</a></div>
+    </div>
+
+    <!-- Register Form -->
+    <div id="register-form" data-testid="register-form" style="display:none">
+      <div class="form-group">
+        <label for="reg-username">用户名</label>
+        <input id="reg-username" data-testid="reg-username" type="text" placeholder="输入用户名">
+      </div>
+      <div class="form-group">
+        <label for="reg-password">密码</label>
+        <input id="reg-password" data-testid="reg-password" type="password" placeholder="输入密码">
+      </div>
+      <div class="form-group">
+        <label for="reg-email">邮箱</label>
+        <input id="reg-email" data-testid="reg-email" type="email" placeholder="输入邮箱">
+      </div>
+      <div class="error-msg" id="reg-error" data-testid="reg-error"></div>
+      <button class="btn btn-primary btn-block" id="register-submit" data-testid="register-submit">注册</button>
+      <div class="auth-toggle">已有账号？<a id="show-login" data-testid="show-login">登录</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======== Main App Screen ======== -->
+<div id="app-screen" style="display:none" data-testid="app-screen">
+
+  <div class="header" data-testid="header">
+    <div class="header-left">
+      <h1 data-testid="app-title">试剑靶场</h1>
+    </div>
+    <div class="header-right">
+      <span class="user-badge" id="user-badge" data-testid="user-badge"></span>
+      <button class="btn btn-outline btn-sm" id="btn-logout" data-testid="btn-logout">退出</button>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- Toolbar -->
+    <div class="toolbar" data-testid="toolbar">
+      <input class="search-input" id="search-input" data-testid="search-input" type="text" placeholder="搜索任务标题...">
+      <select id="status-filter" data-testid="status-filter">
+        <option value="">全部状态</option>
+        <option value="todo">待办</option>
+        <option value="doing">进行中</option>
+        <option value="done">已完成</option>
+        <option value="archived">已归档</option>
+      </select>
+      <button class="btn btn-primary" id="btn-create-task" data-testid="btn-create-task">+ 创建任务</button>
+    </div>
+
+    <!-- Task List -->
+    <div id="task-list" class="task-grid" data-testid="task-list"></div>
+
+    <!-- Pagination -->
+    <div class="pagination" id="pagination" data-testid="pagination">
+      <button class="page-btn" id="page-prev" data-testid="page-prev" disabled>上一页</button>
+      <span class="page-info" id="page-info" data-testid="page-info"></span>
+      <button class="page-btn" id="page-next" data-testid="page-next">下一页</button>
+    </div>
+
+    <!-- Admin Section -->
+    <div class="admin-section" id="admin-section" style="display:none" data-testid="admin-section">
+      <h2 id="admin-toggle" data-testid="admin-toggle">🔒 管理面板</h2>
+      <div id="admin-content" style="display:none" data-testid="admin-content">
+        <table class="admin-table">
+          <thead><tr><th>ID</th><th>用户名</th><th>邮箱</th><th>角色</th><th>创建时间</th></tr></thead>
+          <tbody id="admin-table-body" data-testid="admin-table-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ======== Task Modal ======== -->
+<div class="modal-overlay" id="task-modal" data-testid="task-modal">
+  <div class="modal-box">
+    <h2 id="modal-title" data-testid="modal-title">创建任务</h2>
+    <div class="form-group">
+      <label for="modal-task-title">标题</label>
+      <input id="modal-task-title" data-testid="modal-task-title" type="text" placeholder="任务标题">
+    </div>
+    <div class="form-group">
+      <label for="modal-task-desc">描述</label>
+      <textarea id="modal-task-desc" data-testid="modal-task-desc" placeholder="任务描述"></textarea>
+    </div>
+    <div class="form-group">
+      <label for="modal-task-priority">优先级</label>
+      <select id="modal-task-priority" data-testid="modal-task-priority">
+        <option value="low">低</option>
+        <option value="medium" selected>中</option>
+        <option value="high">高</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" id="modal-cancel" data-testid="modal-cancel">取消</button>
+      <button class="btn btn-primary" id="modal-confirm" data-testid="modal-confirm">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+const API = window.location.origin + '/api';
+let token = localStorage.getItem('token') || '';
+let currentUser = null;
+let currentPage = 1;
+let pageLimit = 10;
+let totalTasks = 0;
+let editingTaskId = null;
+
+// ============================================================
+// Helpers
+// ============================================================
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast toast-' + type + ' show';
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function apiUrl(path) {
+  return API + path;
+}
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (token) opts.headers['Authorization'] = 'Bearer ' + token;
+  if (body instanceof FormData) {
+    opts.body = body;
+  } else if (body !== undefined) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(apiUrl(path), opts);
+  if (res.status === 204) return null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || 'Request failed');
+  return data;
+}
+
+// ============================================================
+// Auth UI
+// ============================================================
+document.getElementById('show-register').onclick = () => {
+  document.getElementById('login-form').style.display = 'none';
+  document.getElementById('register-form').style.display = 'block';
+};
+document.getElementById('show-login').onclick = () => {
+  document.getElementById('register-form').style.display = 'none';
+  document.getElementById('login-form').style.display = 'block';
+};
+
+// Login
+document.getElementById('login-submit').onclick = async () => {
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const err = document.getElementById('login-error');
+  if (!username || !password) { err.textContent = '请填写用户名和密码'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  try {
+    const data = await api('POST', '/login', { username, password });
+    token = data.access_token;
+    currentUser = data.user;
+    localStorage.setItem('token', token);
+    showApp();
+  } catch (e) {
+    err.textContent = e.message; err.classList.add('show');
+  }
+};
+
+// Register
+document.getElementById('register-submit').onclick = async () => {
+  const username = document.getElementById('reg-username').value.trim();
+  const password = document.getElementById('reg-password').value;
+  const email = document.getElementById('reg-email').value.trim();
+  const err = document.getElementById('reg-error');
+  if (!username || !password || !email) { err.textContent = '请填写所有字段'; err.classList.add('show'); return; }
+  err.classList.remove('show');
+  try {
+    await api('POST', '/register', { username, password, email });
+    showToast('注册成功，请登录');
+    document.getElementById('show-login').click();
+  } catch (e) {
+    err.textContent = e.message; err.classList.add('show');
+  }
+};
+
+// Logout
+document.getElementById('btn-logout').onclick = () => {
+  token = '';
+  currentUser = null;
+  localStorage.removeItem('token');
+  showAuth();
+};
+
+// ============================================================
+// Screen switching
+// ============================================================
+function showAuth() {
+  document.getElementById('auth-screen').style.display = 'block';
+  document.getElementById('app-screen').style.display = 'none';
+}
+function showApp() {
+  document.getElementById('auth-screen').style.display = 'none';
+  document.getElementById('app-screen').style.display = 'block';
+  document.getElementById('user-badge').textContent = currentUser.username + ' (' + currentUser.role + ')';
+  if (currentUser.role === 'admin') {
+    document.getElementById('admin-section').style.display = 'block';
+  }
+  loadTasks();
+}
+
+// Admin toggle
+document.getElementById('admin-toggle').onclick = () => {
+  const content = document.getElementById('admin-content');
+  const isHidden = content.style.display === 'none';
+  content.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) loadAdminUsers();
+};
+
+async function loadAdminUsers() {
+  try {
+    const data = await api('GET', '/admin/users');
+    const tbody = document.getElementById('admin-table-body');
+    tbody.innerHTML = data.users.map(u =>
+      `<tr data-testid="admin-user-row-${u.id}">
+        <td>${u.id}</td>
+        <td>${escapeHtml(u.username)}</td>
+        <td>${escapeHtml(u.email)}</td>
+        <td>${u.role}</td>
+        <td>${u.created_at}</td>
+      </tr>`
+    ).join('');
+  } catch (e) {
+    showToast('加载用户失败: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// Simple escape for safe text (but NOT used for task title rendering - XSS vuln)
+// ============================================================
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ============================================================
+// Task CRUD
+// ============================================================
+async function loadTasks() {
+  const list = document.getElementById('task-list');
+  list.innerHTML = '<div class="loading-state" data-testid="loading-state">加载中...</div>';
+  const search = document.getElementById('search-input').value;
+  const status = document.getElementById('status-filter').value;
+  let path = `/tasks?page=${currentPage}&limit=${pageLimit}`;
+  if (status) path += '&status=' + status;
+  if (search) path += '&search=' + encodeURIComponent(search);
+  try {
+    const data = await api('GET', path);
+    totalTasks = data.total;
+    renderTasks(data.items);
+    renderPagination();
+  } catch (e) {
+    list.innerHTML = '<div class="empty-state" data-testid="empty-state">加载失败: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function renderTasks(tasks) {
+  const list = document.getElementById('task-list');
+  if (tasks.length === 0) {
+    list.innerHTML = '<div class="empty-state" data-testid="empty-state">暂无任务</div>';
+    return;
+  }
+  list.innerHTML = tasks.map(t => {
+    // ============================================================
+    // XSS 漏洞：使用 innerHTML 直接渲染 title，不转义
+    // 攻击者可以创建包含 <script> 或 <img onerror> 的标题
+    // ============================================================
+    const statusLabel = {todo:'待办', doing:'进行中', done:'已完成', archived:'已归档'}[t.status] || t.status;
+    const priorityLabel = {low:'低', medium:'中', high:'高'}[t.priority] || t.priority;
+    const nextStatus = {todo:'doing', doing:'done', done:'archived'}[t.status];
+
+    return `<div class="task-card" data-testid="task-card-${t.id}">
+      <div class="task-body">
+        <div class="task-title" data-testid="task-title-${t.id}">${t.title}</div>
+        <div class="task-desc" data-testid="task-desc-${t.id}">${escapeHtml(t.description)}</div>
+        <div class="task-meta">
+          <span class="badge badge-status-${t.status}" data-testid="task-status-${t.id}">${statusLabel}</span>
+          <span class="badge badge-priority-${t.priority}" data-testid="task-priority-${t.id}">${priorityLabel}</span>
+          <span style="font-size:12px;color:#999;" data-testid="task-user-${t.id}">#${t.id}</span>
+        </div>
+      </div>
+      <div class="task-actions">
+        ${nextStatus ? `<button class="btn btn-success btn-sm task-status-btn" data-id="${t.id}" data-testid="task-status-btn-${t.id}">${ {todo:'开始', doing:'完成', done:'归档'}[t.status] }</button>` : ''}
+        <button class="btn btn-outline btn-sm task-edit-btn" data-id="${t.id}" data-testid="task-edit-btn-${t.id}">编辑</button>
+        ${currentUser && currentUser.role === 'admin' ? `<button class="btn btn-danger btn-sm task-delete-btn" data-id="${t.id}" data-testid="task-delete-btn-${t.id}">删除</button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  // Attach event listeners
+  list.querySelectorAll('.task-status-btn').forEach(btn => {
+    btn.onclick = () => changeTaskStatus(Number(btn.dataset.id));
+  });
+  list.querySelectorAll('.task-edit-btn').forEach(btn => {
+    btn.onclick = () => openEditModal(Number(btn.dataset.id));
+  });
+  list.querySelectorAll('.task-delete-btn').forEach(btn => {
+    btn.onclick = () => deleteTask(Number(btn.dataset.id));
+  });
+}
+
+function renderPagination() {
+  const totalPages = Math.max(1, Math.ceil(totalTasks / pageLimit));
+  document.getElementById('page-info').textContent = `第 ${currentPage} / ${totalPages} 页（共 ${totalTasks} 条）`;
+  document.getElementById('page-prev').disabled = currentPage <= 1;
+  document.getElementById('page-next').disabled = currentPage >= totalPages;
+}
+
+document.getElementById('page-prev').onclick = () => { if (currentPage > 1) { currentPage--; loadTasks(); } };
+document.getElementById('page-next').onclick = () => { currentPage++; loadTasks(); };
+
+// Search & filter
+let searchTimer;
+document.getElementById('search-input').oninput = () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { currentPage = 1; loadTasks(); }, 400);
+};
+document.getElementById('status-filter').onchange = () => {
+  currentPage = 1;
+  loadTasks();
+};
+
+// ============================================================
+// Task Status Change
+// ============================================================
+async function changeTaskStatus(id) {
+  const flow = {todo:'doing', doing:'done', done:'archived'};
+  try {
+    // Get current status first
+    const task = await api('GET', `/tasks/${id}`);
+    const next = flow[task.status];
+    if (!next) { showToast('无法流转', 'error'); return; }
+    await api('PUT', `/tasks/${id}/status`, { status: next });
+    showToast('状态已更新');
+    loadTasks();
+  } catch (e) {
+    showToast('更新失败: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// Delete Task
+// ============================================================
+async function deleteTask(id) {
+  if (!confirm('确认删除任务 #' + id + '？')) return;
+  try {
+    await api('DELETE', `/tasks/${id}`);
+    showToast('已删除');
+    loadTasks();
+  } catch (e) {
+    showToast('删除失败: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// Create / Edit Modal
+// ============================================================
+const modal = document.getElementById('task-modal');
+const modalTitle = document.getElementById('modal-title');
+const modalTaskTitle = document.getElementById('modal-task-title');
+const modalTaskDesc = document.getElementById('modal-task-desc');
+const modalTaskPriority = document.getElementById('modal-task-priority');
+const modalConfirm = document.getElementById('modal-confirm');
+const modalCancel = document.getElementById('modal-cancel');
+
+function openCreateModal() {
+  editingTaskId = null;
+  modalTitle.textContent = '创建任务';
+  modalTaskTitle.value = '';
+  modalTaskDesc.value = '';
+  modalTaskPriority.value = 'medium';
+  modalConfirm.textContent = '创建';
+  modal.classList.add('show');
+}
+
+async function openEditModal(id) {
+  editingTaskId = id;
+  modalTitle.textContent = '编辑任务';
+  try {
+    const task = await api('GET', `/tasks/${id}`);
+    modalTaskTitle.value = task.title;
+    modalTaskDesc.value = task.description;
+    modalTaskPriority.value = task.priority;
+    modalConfirm.textContent = '保存';
+    modal.classList.add('show');
+  } catch (e) {
+    showToast('加载任务失败: ' + e.message, 'error');
+  }
+}
+
+modalCancel.onclick = () => modal.classList.remove('show');
+modal.onclick = (e) => { if (e.target === modal) modal.classList.remove('show'); };
+
+modalConfirm.onclick = async () => {
+  const title = modalTaskTitle.value.trim();
+  if (!title) { showToast('请输入标题', 'error'); return; }
+  const body = { title, description: modalTaskDesc.value.trim(), priority: modalTaskPriority.value };
+  try {
+    if (editingTaskId) {
+      await api('PUT', `/tasks/${editingTaskId}`, body);
+      showToast('任务已更新');
+    } else {
+      await api('POST', '/tasks', body);
+      showToast('任务已创建');
+    }
+    modal.classList.remove('show');
+    loadTasks();
+  } catch (e) {
+    showToast('操作失败: ' + e.message, 'error');
+  }
+};
+
+document.getElementById('btn-create-task').onclick = openCreateModal;
+
+// ============================================================
+// Keyboard shortcut: Enter to login/register
+// ============================================================
+document.getElementById('login-password').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('login-submit').click(); };
+document.getElementById('reg-email').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('register-submit').click(); };
+
+// ============================================================
+// Init: check token on load
+// ============================================================
+(async function init() {
+  if (token) {
+    try {
+      currentUser = await api('GET', '/me');
+      showApp();
+    } catch (e) {
+      token = '';
+      localStorage.removeItem('token');
+      showAuth();
+    }
+  } else {
+    showAuth();
+  }
+})();
+</script>
+</body>
+</html>

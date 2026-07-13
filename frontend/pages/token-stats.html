@@ -1,0 +1,83 @@
+<div class="max-w-5xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">Token 统计</h1>
+
+  <!-- Summary cards -->
+  <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <p class="text-sm text-gray-500 mb-1">总 Tokens</p>
+      <p id="stat-total" class="text-3xl font-bold text-gray-800">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <p class="text-sm text-gray-500 mb-1">总输入</p>
+      <p id="stat-input" class="text-3xl font-bold text-blue-600">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <p class="text-sm text-gray-500 mb-1">总输出</p>
+      <p id="stat-output" class="text-3xl font-bold text-green-600">0</p>
+    </div>
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 p-5">
+      <p class="text-sm text-gray-500 mb-1">估算费用</p>
+      <p id="stat-cost" class="text-3xl font-bold text-purple-600">-</p>
+    </div>
+  </div>
+
+  <!-- By date -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+    <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+      <h2 class="text-base font-semibold text-gray-700">按日统计</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-200">
+          <th class="text-left px-4 py-3 font-medium text-gray-600">日期</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">输入 Tokens</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">输出 Tokens</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">合计</th>
+        </tr>
+      </thead>
+      <tbody id="table-date">
+        <tr><td colspan="4" class="text-center py-8 text-gray-400">暂无数据</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- By provider -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+    <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+      <h2 class="text-base font-semibold text-gray-700">按 Provider 统计</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-200">
+          <th class="text-left px-4 py-3 font-medium text-gray-600">Provider</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">输入 Tokens</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">输出 Tokens</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">合计</th>
+        </tr>
+      </thead>
+      <tbody id="table-provider">
+        <tr><td colspan="4" class="text-center py-8 text-gray-400">暂无数据</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- By project -->
+  <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+    <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+      <h2 class="text-base font-semibold text-gray-700">按项目统计</h2>
+    </div>
+    <table class="w-full text-sm">
+      <thead>
+        <tr class="border-b border-gray-200">
+          <th class="text-left px-4 py-3 font-medium text-gray-600">项目</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">输入 Tokens</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">输出 Tokens</th>
+          <th class="text-right px-4 py-3 font-medium text-gray-600">合计</th>
+        </tr>
+      </thead>
+      <tbody id="table-project">
+        <tr><td colspan="4" class="text-center py-8 text-gray-400">暂无数据</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>

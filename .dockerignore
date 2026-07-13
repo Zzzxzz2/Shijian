@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.mcp.json
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/node_modules
+**/dist
+**/test-results
+**/playwright-report
+**/*.db*
+**/*.log
+backend/uploads
+backend/screenshots
+docs/images
+tests

@@ -1,0 +1,219 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Refs API",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/users": {
+      "post": {
+        "summary": "Create user with address",
+        "operationId": "createFullUser",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  { "$ref": "#/components/schemas/Base" },
+                  { "$ref": "#/components/schemas/UserProfile" }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserProfile" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/pets": {
+      "post": {
+        "summary": "Add a pet",
+        "operationId": "addPet",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/Cat" },
+                  { "$ref": "#/components/schemas/Dog" }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/animals": {
+      "post": {
+        "summary": "Add an animal",
+        "operationId": "addAnimal",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  { "$ref": "#/components/schemas/Cat" },
+                  { "$ref": "#/components/schemas/Dog" }
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created"
+          }
+        }
+      }
+    },
+    "/api/employees": {
+      "post": {
+        "summary": "Create employee with nested refs",
+        "operationId": "createEmployee",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmployeeNested"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmployeeNested" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/single-ref": {
+      "post": {
+        "summary": "Single ref endpoint",
+        "operationId": "singleRef",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UserProfile" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserProfile" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/nonexistent-ref": {
+      "post": {
+        "summary": "Ref to non-existent schema",
+        "operationId": "nonexistentRef",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/NonExistent" }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "OK" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Base": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "example": 100 },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "UserProfile": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string", "example": "admin" },
+          "email": { "type": "string" },
+          "role": { "type": "string", "enum": ["admin", "user", "viewer"] },
+          "tags": {
+            "type": "array",
+            "items": { "type": "string" }
+          }
+        }
+      },
+      "Cat": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "meow_volume": { "type": "integer", "example": 10 }
+        }
+      },
+      "Dog": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "bark_volume": { "type": "integer", "example": 8 }
+        }
+      },
+      "Address": {
+        "type": "object",
+        "properties": {
+          "city": { "type": "string", "example": "Tokyo" },
+          "street": { "type": "string" }
+        }
+      },
+      "Company": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "address": { "$ref": "#/components/schemas/Address" }
+        }
+      },
+      "Dept": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "company": { "$ref": "#/components/schemas/Company" }
+        }
+      },
+      "EmployeeNested": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "email": { "type": "string", "example": "test@example.com" },
+          "dept": { "$ref": "#/components/schemas/Dept" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,154 @@
+<div class="max-w-6xl mx-auto px-4 py-8">
+  <h1 class="text-2xl font-bold text-gray-800 mb-6">浏览统计</h1>
+
+  <!-- Summary cards -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500 mb-1">总访问量</div>
+      <div id="stat-total" class="text-2xl font-bold text-primary-600">-</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500 mb-1">今日访问</div>
+      <div id="stat-today" class="text-2xl font-bold text-primary-600">-</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500 mb-1">独立访客</div>
+      <div id="stat-unique" class="text-2xl font-bold text-primary-600">-</div>
+    </div>
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+      <div class="text-sm text-gray-500 mb-1">近 7 日</div>
+      <div id="stat-7d" class="text-2xl font-bold text-primary-600">-</div>
+    </div>
+  </div>
+
+  <!-- 7-day chart (simple bar) -->
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">近 7 日趋势</h2>
+    <div id="chart-7d" class="flex items-end gap-3 h-40"></div>
+  </div>
+
+  <!-- Top pages -->
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">热门页面</h2>
+    <div id="top-pages" class="space-y-2">
+      <div class="text-gray-400 text-sm">加载中...</div>
+    </div>
+  </div>
+
+  <!-- Recent views -->
+  <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <h2 class="text-lg font-semibold text-gray-700 mb-4">最近访问</h2>
+    <div id="recent-views" class="overflow-x-auto">
+      <div class="text-gray-400 text-sm">加载中...</div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  function fetchSummary() {
+    fetch('/api/analytics/summary')
+      .then(function (r) {
+        if (!r.ok) throw new Error('Failed to load analytics');
+        return r.json();
+      })
+      .then(function (data) {
+        renderSummary(data);
+        renderChart(data.views_7d);
+        renderTopPages(data.top_pages);
+        renderRecentViews(data.recent_views);
+      })
+      .catch(function (err) {
+        console.error('Analytics error:', err);
+        document.querySelector('#top-pages').innerHTML = '<div class="text-red-400 text-sm">加载失败</div>';
+      });
+  }
+
+  function renderSummary(data) {
+    document.getElementById('stat-total').textContent = data.total_views;
+    document.getElementById('stat-today').textContent = data.views_today;
+    document.getElementById('stat-unique').textContent = data.unique_visitors;
+    document.getElementById('stat-7d').textContent = data.views_7d.reduce(function (a, b) { return a + b; }, 0);
+  }
+
+  function renderChart(daily) {
+    var el = document.getElementById('chart-7d');
+    if (!daily || daily.length === 0) {
+      el.innerHTML = '<div class="text-gray-400 text-sm">暂无数据</div>';
+      return;
+    }
+    var max = Math.max.apply(null, daily) || 1;
+    var days = ['6天前','5天前','4天前','3天前','前天','昨天','今天'];
+    // adjust labels for shorter arrays
+    var labels = days.slice(days.length - daily.length);
+    var html = '';
+    for (var i = 0; i < daily.length; i++) {
+      var h = Math.max(4, (daily[i] / max) * 160);
+      html += '<div class="flex flex-col items-center flex-1">';
+      html += '<div class="text-xs text-gray-500 mb-1">' + daily[i] + '</div>';
+      html += '<div class="w-full bg-primary-100 rounded-t" style="height:' + h + 'px;max-width:48px;background:#3b82f6;"></div>';
+      html += '<div class="text-xs text-gray-400 mt-1">' + labels[i] + '</div>';
+      html += '</div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderTopPages(pages) {
+    var el = document.getElementById('top-pages');
+    if (!pages || pages.length === 0) {
+      el.innerHTML = '<div class="text-gray-400 text-sm">暂无数据</div>';
+      return;
+    }
+    var max = Math.max.apply(null, pages.map(function (p) { return p.count; })) || 1;
+    var html = '';
+    for (var i = 0; i < pages.length; i++) {
+      var pct = (pages[i].count / max * 100).toFixed(0);
+      html += '<div class="flex items-center gap-3">';
+      html += '<span class="text-sm text-gray-600 w-48 truncate" title="' + pages[i].path + '">' + pages[i].path + '</span>';
+      html += '<div class="flex-1 bg-gray-100 rounded h-5 overflow-hidden">';
+      html += '<div class="bg-primary-500 h-full rounded text-xs text-white text-right pr-1 leading-5" style="width:' + pct + '%">' + pages[i].count + '</div>';
+      html += '</div></div>';
+    }
+    el.innerHTML = html;
+  }
+
+  function renderRecentViews(views) {
+    var el = document.getElementById('recent-views');
+    if (!views || views.length === 0) {
+      el.innerHTML = '<div class="text-gray-400 text-sm">暂无数据</div>';
+      return;
+    }
+    var html = '<table class="w-full text-sm"><thead><tr class="text-left text-gray-500 border-b">';
+    html += '<th class="pb-2 pr-4">路径</th><th class="pb-2 pr-4">IP</th><th class="pb-2 pr-4">停留(秒)</th><th class="pb-2">时间</th>';
+    html += '</tr></thead><tbody>';
+    for (var i = 0; i < views.length; i++) {
+      var v = views[i];
+      var dur = v.duration_ms ? (v.duration_ms / 1000).toFixed(1) : '-';
+      var time = v.entered_at ? new Date(v.entered_at).toLocaleString('zh-CN') : '-';
+      html += '<tr class="border-b border-gray-100 hover:bg-gray-50">';
+      html += '<td class="py-2 pr-4 max-w-48 truncate" title="' + v.path + '">' + v.path + '</td>';
+      html += '<td class="py-2 pr-4 text-gray-500">' + v.ip_address + '</td>';
+      html += '<td class="py-2 pr-4 text-gray-500">' + dur + '</td>';
+      html += '<td class="py-2 text-gray-500 text-xs">' + time + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    el.innerHTML = html;
+  }
+
+  // Check session cookie before loading
+  if (document.cookie.indexOf('analytics_session=') === -1) {
+    document.querySelector('#stat-total').textContent = '-';
+    document.querySelector('#stat-today').textContent = '-';
+    document.querySelector('#stat-unique').textContent = '-';
+    document.querySelector('#stat-7d').textContent = '-';
+    document.getElementById('chart-7d').innerHTML = '<div class="text-gray-400 text-sm">未授权访问</div>';
+    document.querySelector('#top-pages').innerHTML = '<div class="text-gray-400 text-sm">未授权访问</div>';
+    document.querySelector('#recent-views').innerHTML = '<div class="text-gray-400 text-sm">未授权访问</div>';
+  } else {
+    fetchSummary();
+  }
+})();
+</script>

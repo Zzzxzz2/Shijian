@@ -1,0 +1,98 @@
+<div class="max-w-4xl mx-auto px-4 py-8">
+  <!-- Header -->
+  <div class="flex items-center gap-3 mb-6">
+    <a href="#/projects" id="back-link" class="text-gray-400 hover:text-gray-600 transition-colors">
+      <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+    </a>
+    <div class="flex-1">
+      <h1 class="text-2xl font-bold text-gray-800">AI 生成测试计划</h1>
+      <p id="project-name" class="text-sm text-gray-500 mt-0.5">项目：<span class="font-medium"></span></p>
+    </div>
+    <div id="token-usage" class="hidden text-right">
+      <span class="text-xs text-gray-400">本次消耗</span>
+      <p class="text-sm font-medium text-gray-600"><span id="token-count">0</span> tokens</p>
+    </div>
+  </div>
+
+  <!-- State A: Input phase -->
+  <div id="phase-input">
+    <!-- Requirement textarea -->
+    <div class="mb-6">
+      <label class="block text-sm font-medium text-gray-700 mb-2">测试需求</label>
+      <textarea id="requirement" rows="5"
+        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm resize-none"
+        placeholder="例如：测试登录功能，包括正常登录、密码错误、账号不存在"></textarea>
+    </div>
+
+    <!-- Document list -->
+    <div class="mb-6">
+      <div class="flex items-center justify-between mb-2">
+        <label class="block text-sm font-medium text-gray-700">参考文档</label>
+        <label class="px-3 py-1.5 text-xs bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg cursor-pointer transition-colors">
+          + 上传文档
+          <input id="doc-upload" type="file" accept=".pdf,.docx,.txt,.md" class="hidden" />
+        </label>
+      </div>
+      <div id="doc-list" class="space-y-2">
+        <p class="text-sm text-gray-400">暂无文档（可选）</p>
+      </div>
+    </div>
+
+    <!-- Generate button -->
+    <div class="text-right">
+      <button id="generate-btn"
+        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors">
+        生成测试计划
+      </button>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loading-state" class="hidden mt-6 text-center py-8">
+      <svg class="animate-spin h-8 w-8 text-primary-500 mx-auto mb-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+      </svg>
+      <p class="text-sm text-gray-500">AI 正在生成测试计划...</p>
+    </div>
+  </div>
+
+  <!-- State B: Preview phase -->
+  <div id="phase-preview" class="hidden">
+    <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+      <table class="w-full text-sm">
+        <thead>
+          <tr class="bg-gray-50 border-b border-gray-200">
+            <th class="text-left px-3 py-3 font-medium text-gray-600 w-10">#</th>
+            <th class="text-left px-3 py-3 font-medium text-gray-600">用例名称</th>
+            <th class="text-left px-3 py-3 font-medium text-gray-600 w-24">类型</th>
+            <th class="text-left px-3 py-3 font-medium text-gray-600">Method</th>
+            <th class="text-left px-3 py-3 font-medium text-gray-600">URL</th>
+            <th class="text-left px-3 py-3 font-medium text-gray-600">断言规则</th>
+            <th class="text-center px-3 py-3 font-medium text-gray-600 w-16">操作</th>
+          </tr>
+        </thead>
+        <tbody id="preview-list"></tbody>
+      </table>
+    </div>
+
+    <!-- Add row button -->
+    <div class="mb-6">
+      <button id="add-row-btn"
+        class="px-4 py-2 text-sm border border-dashed border-gray-300 text-gray-500 hover:border-primary-400 hover:text-primary-600 rounded-lg transition-colors w-full">
+        + 新增一行
+      </button>
+    </div>
+
+    <!-- Action buttons -->
+    <div class="flex items-center justify-between">
+      <button id="regenerate-btn"
+        class="px-4 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors">
+        重新生成
+      </button>
+      <button id="save-btn"
+        class="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors">
+        确认保存
+      </button>
+    </div>
+  </div>
+</div>
