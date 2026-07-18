@@ -54,7 +54,7 @@
 | 能力 | 说明 |
 |---|---|
 | 认证与权限 | 注册、登录、JWT、访客 Token、改密、owner/editor/viewer、管理员用户管理 |
-| 项目与用例 | 项目 CRUD、API/UI/Workflow/Contract 用例、批量操作、标签、导入导出 |
+| 项目与用例 | 项目 CRUD、API/UI 用例、Workflow 流程、Contract 断言、批量操作、标签、导入导出 |
 | 执行与报告 | 异步 TestRun、断言、历史 diff、结构化失败分类、截图、Playwright Trace |
 | Mock | 录制、列表、编辑、启停、回放、转换为用例、删除 |
 | Schema | OpenAPI 解析、coverage、fuzz、security、all 四种模式 |
