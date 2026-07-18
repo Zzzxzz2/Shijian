@@ -162,7 +162,7 @@ class TestFlow4UiCase:
             if status_resp.status_code == 200:
                 run_data = status_resp.json()
                 status = run_data.get("status", "")
-                if status in ("completed", "passed", "failed"):
+                if status in ("done", "completed", "passed", "failed"):
                     logger.info("Run %s finished with status: %s", run_id, status)
                     break
             time.sleep(2)
@@ -225,7 +225,7 @@ class TestFlow4UiCase:
         # 轮询完成
         for _ in range(20):
             r = api.get(f"/api/runs/{run_id}", headers={"Authorization": f"Bearer {auth_token}"})
-            if r.status_code == 200 and r.json().get("status") in ("completed", "passed", "failed"):
+            if r.status_code == 200 and r.json().get("status") in ("done", "completed", "passed", "failed"):
                 break
             time.sleep(3)
         else:
@@ -294,7 +294,7 @@ class TestFlow4UiCase:
 
         for _ in range(20):
             r = api.get(f"/api/runs/{run_id}", headers={"Authorization": f"Bearer {auth_token}"})
-            if r.status_code == 200 and r.json().get("status") in ("completed", "passed", "failed"):
+            if r.status_code == 200 and r.json().get("status") in ("done", "completed", "passed", "failed"):
                 break
             time.sleep(3)
         else:

@@ -18,6 +18,7 @@ from database import async_session
 from models import Project, TestCase, TestResult, TestRun, TestRunCases
 from routers.ws import broadcast
 from services.auth_helper import _get_auth_token
+from services.http_security import redact_headers
 from services.mock.engine import registry
 from services.ui_executor import execute_ui_case
 from services.perf_executor import execute_perf_case
@@ -233,7 +234,7 @@ async def _send_api_request(
         method,
         url,
         headers=headers or None,
-        json=body if body else None,
+        json=body if body is not None else None,
     )
     engine = registry.get(project_id) if project_id else None
     config = await engine.refresh_config() if engine else None
@@ -288,7 +289,7 @@ async def _execute_workflow(steps: list[dict], project_url: str, project_id: int
 
             detail = {
                 "status_code": resp.status_code,
-                "response_headers": dict(resp.headers),
+                "response_headers": redact_headers(resp.headers),
                 "response_body": resp_body,
             }
         except Exception as e:
@@ -364,7 +365,7 @@ async def execute_api_case(
     detail = {
         "request_url": url,
         "method": method,
-        "request_headers": headers,
+        "request_headers": redact_headers(headers),
         "request_body": body,
         "status_code": None,
         "response_headers": {},
@@ -376,14 +377,14 @@ async def execute_api_case(
     error_msg = None
     start = time.monotonic()
 
-    # Retry up to 2 times on transient HTTP errors
-    MAX_RETRIES = 2
+    # Retrying mutating methods can duplicate side effects.
+    MAX_RETRIES = 2 if method in {"GET", "HEAD", "OPTIONS"} else 1
     for attempt in range(MAX_RETRIES):
         try:
             resp = await _send_api_request(method, url, headers, body, project_id)
             status_code = resp.status_code
             detail["status_code"] = status_code
-            detail["response_headers"] = dict(resp.headers)
+            detail["response_headers"] = redact_headers(resp.headers)
             try:
                 detail["response_body"] = resp.json()
             except Exception:

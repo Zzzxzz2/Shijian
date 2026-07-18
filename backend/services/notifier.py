@@ -42,7 +42,7 @@ async def send_notification(schedule, run) -> None:
 
     text = (
         f"试剑 — 定时执行完成\n"
-        f"任务：{schedule.name}\n"
+        f"任务：定时调度 #{schedule.id}\n"
         f"结果：{run.result or 'unknown'}\n"
         f"通过：{passed}\n"
         f"失败：{failed}"

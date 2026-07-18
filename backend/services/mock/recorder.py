@@ -13,6 +13,7 @@ from typing import Any
 
 from database import db_retry, async_session
 from models import MockRecord
+from services.http_security import redact_headers
 
 logger = logging.getLogger(__name__)
 
@@ -97,11 +98,11 @@ class Recorder:
             "method": method.upper(),
             "path": path,
             "query_string": query_string,
-            "request_headers": dict(request_headers),
+            "request_headers": redact_headers(request_headers),
             "request_body": body_bytes,
             "body_type": body_type,
             "response_status": response_status,
-            "response_headers": dict(response_headers),
+            "response_headers": redact_headers(response_headers),
             "response_body": resp_bytes,
             "response_body_type": resp_body_type,
             "content_type": response_headers.get("content-type", ""),

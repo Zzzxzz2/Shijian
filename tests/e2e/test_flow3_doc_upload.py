@@ -107,11 +107,11 @@ class TestFlow3DocUpload:
 
         # 切换到文档 tab（data-tab="docs"）
         docs_tab = page.locator("button.tab-btn[data-tab='docs']")
-        if docs_tab.is_visible():
-            docs_tab.click()
-            page.wait_for_load_state("networkidle")
+        docs_tab.wait_for(state="visible", timeout=10000)
+        docs_tab.click()
 
         # 验证文档 tab 正常渲染 + 上传按钮可见
+        page.locator("#upload-doc-btn").wait_for(state="visible", timeout=10000)
         assert page.locator("#upload-doc-btn").is_visible(), "上传按钮不可见"
         assert page.locator("#doc-list").is_visible()
 
@@ -134,41 +134,23 @@ class TestFlow3DocUpload:
         page.goto(f"{BASE_URL}/app.html#/projects/{project_id}")
         page.wait_for_load_state("networkidle")
 
-        # ── API 上传 schema ──
-        schema_text = json.dumps(MINIMAL_OPENAPI_JSON)
-        upload_resp = cli.post(
-            f"/api/projects/{project_id}/schema",
-            json={"content": schema_text, "format": "openapi_json"},
-            headers={"Authorization": f"Bearer {auth_token}"},
-        )
-
-        if upload_resp.status_code not in (200, 201):
-            # 可能没有 schema 端点，尝试通过 docs 上传
+        # ── 通过正式 multipart 文档端点上传 ──
+        with open(openapi_spec_file, "rb") as spec:
             upload_resp = cli.post(
                 f"/api/projects/{project_id}/docs",
-                json={"content": schema_text, "filename": "openapi.json"},
+                files={"file": ("openapi.json", spec, "application/json")},
                 headers={"Authorization": f"Bearer {auth_token}"},
             )
-
-        if upload_resp.status_code not in (200, 201):
-            pytest.skip("Schema API 不可用 — 后端可能未实现文档上传端点")
+        assert upload_resp.status_code == 201, upload_resp.text
 
         # ── UI 验证 ──
         page.goto(f"{BASE_URL}/app.html#/projects/{project_id}")
         page.wait_for_load_state("networkidle")
 
-        # 刷新页面后，检查是否展示了解析后的端点
-        page.reload()
-        page.wait_for_load_state("networkidle")
-
-        # 检查：页面是否展示了 OpenAPI 路径信息
-        has_schema_info = (
-            page.locator("text=OpenAPI").first.is_visible()
-            or page.locator("text=API").first.is_visible()
-            or page.locator("text=Schema").first.is_visible()
-        )
-        # 即使 schema 信息没展示，页面至少应该正常渲染
-        assert page.locator("#new-case-btn, #execute-cases-btn, #ai-plan-btn").first.is_visible()
+        docs_tab = page.locator("button.tab-btn[data-tab='docs']")
+        docs_tab.wait_for(state="visible", timeout=10000)
+        docs_tab.click()
+        page.get_by_text("openapi.json").wait_for(state="visible", timeout=10000)
 
     def test_e2e_203_case_skeleton_from_schema(self, page, base_url, test_user, auth_token, openapi_spec_file):
         """E2E-203: 基于 Schema 生成用例骨架。"""
@@ -189,34 +171,12 @@ class TestFlow3DocUpload:
         page.goto(f"{BASE_URL}/app.html#/projects/{project_id}")
         page.wait_for_load_state("networkidle")
 
-        # 尝试从 schema 生成用例
-        gen_btn = page.locator(
-            "button:has-text('生成用例'), "
-            "button:has-text('导入用例'), "
-            "button:has-text('从 Schema 生成')"
-        ).first
-
-        if gen_btn.is_visible():
-            gen_btn.click()
-            page.wait_for_load_state("networkidle")
-
-            # 等待用例列表更新
-            time.sleep(2)
-
-            # 验证是否有用例生成
-            case_items = page.locator(".case-item, .case-row, .case-card, tr.case").all()
-            assert len(case_items) > 0, "未生成用例骨架"
-        else:
-            # 没有一键生成按钮 — 通过 API 生成骨架
-            gen_resp = cli.post(
-                f"/api/projects/{project_id}/cases/generate-from-schema",
-                headers={"Authorization": f"Bearer {auth_token}"},
-            )
-            if gen_resp.status_code not in (200, 201):
-                pytest.skip("生成骨架 API 不可用")
-
-            page.reload()
-            page.wait_for_load_state("networkidle")
-
-            # 验证页面渲染
-            assert page.locator("#new-case-btn, #execute-cases-btn").first.is_visible()
+        gen_resp = cli.post(
+            f"/api/projects/{project_id}/schema/parse",
+            json={"spec": json.dumps(MINIMAL_OPENAPI_JSON), "mode": "coverage"},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert gen_resp.status_code == 200, gen_resp.text
+        generated = gen_resp.json()
+        assert len(generated["stubs"]) == 5
+        assert generated["coverage_summary"]["total"] == 5

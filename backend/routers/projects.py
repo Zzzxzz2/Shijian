@@ -58,7 +58,10 @@ async def list_projects(
 
     return {
         "items": [
-            ProjectResponse.model_validate(r).model_dump() for r in rows
+            ProjectResponse.model_validate(r)
+            .model_copy(update={"auth_config": {}, "ai_config": {}})
+            .model_dump()
+            for r in rows
         ],
         "total": total,
     }
@@ -100,6 +103,11 @@ async def get_project(
     project = await require_project_access(id, current_user, db, "viewer")
 
     resp = ProjectDetailResponse.model_validate(project)
+    try:
+        await require_project_access(id, current_user, db, "editor")
+    except HTTPException:
+        resp.auth_config = {}
+        resp.ai_config = {}
     case_cnt = (
         await db.execute(
             select(func.count()).where(TestCase.project_id == id)

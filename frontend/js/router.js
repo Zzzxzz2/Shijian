@@ -104,7 +104,7 @@
       })
       .then(function (html) {
         document.getElementById('app').innerHTML = html;
-        document.title = route.title + ' - 试剑 V2';
+        document.title = route.title + ' - 试剑 V3';
 
         // Call page init if exists — use route page file, not raw hash (handles /projects/:id)
         var pageFile = route.page.split('/').pop().replace('.html', '');

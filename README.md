@@ -4,6 +4,47 @@
 
 > 当前定位：可复现的作品集与本地测试平台。已验证功能均列在本文中；性能压测执行器仍是预留能力，不计入完成范围。
 
+> **版本标识：本仓库是试剑 V3，即当前可公开展示、本地部署和持续验证的作品集版本。** V1/V2 仅作为历史演进说明，不在本仓库中单独发布。
+
+## 版本演进
+
+以下 V1/V2 内容根据项目历史记录整理；V3 内容以当前代码、文档和自动化验收结果为准。
+
+### V1 → V2
+
+| 维度 | V1 | V2 |
+|---|---|---|
+| 后端 | 少量端点组合 | FastAPI 模块化路由、完整 CRUD、JWT/bcrypt 认证、SQLAlchemy ORM |
+| 前端 | 零散页面 | 完整 SPA：Hash 路由、命名空间 JavaScript 模块、Tailwind UI |
+| 测试 | 没有成体系 | API 执行引擎、httpx 请求、多类断言、Playwright 截图、WebSocket 事件流 |
+| AI | 无 | DeepSeek 生成测试计划、文档上传与解析 |
+| 部署 | 无 | Docker 与 Podman Compose |
+| Token 统计 | 无 | `TokenUsageLog` 及多维度聚合展示 |
+
+### V2 → V3（当前版本）
+
+| 维度 | V2 | V3 当前实现 |
+|---|---|---|
+| 执行能力 | API / UI / Perf 用例模型 | API 和 UI 可执行；API 内容扩展 Workflow，Contract 通过 `schema_match` 断言实现；Mock/Schema/Security 是生成或运行时引擎。Perf 仍是占位执行器 |
+| 测试集 | 无 | Suite CRUD、用例分组和一键执行 |
+| 定时回归 | 无 | Cron 表达式、APScheduler 持久化调度和手动触发 |
+| 历史对比 | 无 | TestRun diff：`regression` / `fixed` / `unchanged` / `new` |
+| 权限 | 系统级 admin/user | 系统角色 + 项目级 owner/editor/viewer，并校验跨项目资源隔离 |
+| Mock | 无 | 录制、请求匹配、回放、编辑、启停、转用例和删除 |
+| LLM | 仅 DeepSeek | DeepSeek、OpenAI、Claude、Gemini、Ollama，支持 failover 链和无 Key 时的 Mock fallback |
+| 即时执行 | 无 | Quick Test：自然语言生成计划、后台执行、WebSocket 事件流 |
+| 失败分类 | 无 | 6 类结构化 `failure_category`：超时、连接、执行、内部、非预期状态和断言失败 |
+| 覆盖率 | 无 | React + Chart.js 的 Schema/Simple 双模式仪表盘 |
+| Trace 回放 | 无 | Playwright 截图和 `trace.zip`，报告页提供鉴权下载 |
+| React 报告 | 无 | 独立 React 18 报告/覆盖率页，Chart.js + HashRouter，支持 `/report/{run_id}` 直访 |
+| 演示靶场 | 无 | 内置 16 个路由声明，覆盖认证、任务 CRUD、上传、慢请求、管理员与错误码场景 |
+| 管理员面板 | 基础能力 | 系统统计、用户管理、角色修改、强制登出和全项目列表 |
+| 个人中心 | 无 | 资料修改、密码修改、通知配置预留 |
+| 导入导出 | 无 | JSON 用例导入导出，支持类型/标签筛选与部分失败返回 |
+| 文档 | 无统一口径 | README + 产品范围、架构、API、部署、测试、状态和安全文档 |
+| CI | 无 | GitHub Actions：Python 编译/测试、Chromium 安装、React 构建、Compose 校验和三镜像构建 |
+| 发布安全 | 凭据与 Git 生成物治理不完整 | 公共仓库已清理凭据/运行产物，Compose 三服务，生产 JWT/AES 密钥缺失时 fail-fast；当前仍是单实例 SQLite，不宣称分布式生产能力 |
+
 ![项目列表](docs/images/projects.png)
 
 ![执行报告](docs/images/run-report.png)

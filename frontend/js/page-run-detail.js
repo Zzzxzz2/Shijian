@@ -268,6 +268,7 @@
   page.renderResultDetail = function (r) {
     var d = r.detail || {};
     var html = '';
+    var assetToken = encodeURIComponent(localStorage.getItem('token') || '');
 
     // Check if this is a UI result (has steps)
     if (d.steps && d.steps.length > 0) {
@@ -289,7 +290,7 @@
           html += '<p class="text-red-500 text-xs mt-1">' + window.App.utils.escapeHtml(step.error) + '</p>';
         }
         if (step.screenshot) {
-          html += '<div class="mt-2"><img src="/api/screenshots/' + page.runId + '/' + r.case_id + '/' + encodeURIComponent(step.screenshot.split(/[/\\]/).pop()) + '" class="max-w-full h-auto rounded border border-gray-200" style="max-height:200px" /></div>';
+          html += '<div class="mt-2"><img src="/api/screenshots/' + page.runId + '/' + r.case_id + '/' + encodeURIComponent(step.screenshot.split(/[/\\]/).pop()) + '?token=' + assetToken + '" class="max-w-full h-auto rounded border border-gray-200" style="max-height:200px" /></div>';
         }
         html += '</div>';
       }
@@ -303,8 +304,9 @@
         for (var ss = 0; ss < d.screenshots.length; ss++) {
           var ssPath = d.screenshots[ss];
           var filename = ssPath.split(/[/\\]/).pop();
-          html += '<a href="/api/screenshots/' + page.runId + '/' + r.case_id + '/' + filename + '" target="_blank">'
-            + '<img src="/api/screenshots/' + page.runId + '/' + r.case_id + '/' + filename + '" class="w-24 h-18 object-cover rounded border border-gray-200 hover:border-primary-400" />'
+          var protectedUrl = '/api/screenshots/' + page.runId + '/' + r.case_id + '/' + encodeURIComponent(filename) + '?token=' + assetToken;
+          html += '<a href="' + protectedUrl + '" target="_blank" rel="noreferrer">'
+            + '<img src="' + protectedUrl + '" class="w-24 h-18 object-cover rounded border border-gray-200 hover:border-primary-400" />'
             + '</a>';
         }
         html += '</div></div>';
@@ -396,7 +398,8 @@
     }
 
     var protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    var wsUrl = protocol + '//' + window.location.host + '/ws/runs/' + page.runId;
+    var wsUrl = protocol + '//' + window.location.host + '/ws/runs/' + page.runId
+      + '?token=' + encodeURIComponent(localStorage.getItem('token') || '');
 
     try {
       var socket = new WebSocket(wsUrl);

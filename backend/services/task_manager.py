@@ -30,7 +30,7 @@ async def _run(task_id: str, coro) -> dict[str, Any]:
     return _tasks[task_id]
 
 
-def create_task(coro, task_id: str | None = None) -> str:
+def create_task(coro, task_id: str | None = None, **metadata: Any) -> str:
     """Schedule *coro* and return a unique task id for status polling."""
     tid = task_id or str(uuid.uuid4())
     _tasks[tid] = {
@@ -39,6 +39,7 @@ def create_task(coro, task_id: str | None = None) -> str:
         "result": None,
         "error": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
+        **metadata,
     }
     asyncio.create_task(_run(tid, coro))
     return tid

@@ -548,6 +548,29 @@ def sync_client():
     """
     from fastapi.testclient import TestClient
     from main import app
+
+    async def _ensure_ws_user():
+        from sqlalchemy import select
+
+        async with async_session() as session:
+            user = (
+                await session.execute(
+                    select(User).where(User.username == "_ws_test_user")
+                )
+            ).scalar_one_or_none()
+            if user is None:
+                user = User(
+                    username="_ws_test_user",
+                    password_hash=hash_password("ws-test-only"),
+                    role="user",
+                )
+                session.add(user)
+                await session.commit()
+                await session.refresh(user)
+            return create_access_token({"sub": str(user.id)}, user=user)
+
+    global WS_TEST_TOKEN
+    WS_TEST_TOKEN = asyncio.run(_ensure_ws_user())
     with TestClient(app) as c:
         yield c
 

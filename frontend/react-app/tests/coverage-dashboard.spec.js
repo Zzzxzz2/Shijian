@@ -396,36 +396,14 @@ test.describe('异常场景', () => {
   });
 
   test('COV-205: 后端返回异常数据 → chart 不崩溃', async ({ page }) => {
-    // abnormalCoverageData has null entries → endpoints.filter(e => !e.covered)
-    // throws TypeError because null.covered fails. Without ErrorBoundary the
-    // whole page goes to React error overlay. This test:
-    // 1. Captures the error for debugging
-    // 2. Takes a screenshot to confirm visual state
-    // 3. Verifies header *can* be seen (not entirely blank)
     const errors = [];
     page.on('pageerror', (err) => errors.push(err.message));
 
     await mockApi(page, abnormalCoverageData(), statsData(), runsData(5));
-    await page.goto(ROUTE, { waitUntil: 'networkidle' }).catch(() => {});
+    await page.goto(ROUTE, { waitUntil: 'networkidle' });
 
-    await page.waitForTimeout(1500);
-
-    // Check what rendered — the root div content
-    const rootContent = await page.evaluate(() => {
-      const root = document.getElementById('root');
-      return root ? root.innerHTML.length > 50 : false;
-    }).catch(() => false);
-
-    // Take screenshot for evidence
-    await page.screenshot({ path: 'test-results/cov-205-abnormal.png', fullPage: true });
-
-    if (!rootContent) {
-      // If entirely blank, log the error and mark test as known-issue
-      console.log('COV-205: Page crashed with errors:', errors);
-      console.log('This is a known issue: component lacks null-safety on endpoint entries');
-    }
-    // Page may crash — test documents the behavior rather than asserting success
-    expect(rootContent || errors.length > 0).toBe(true);
+    await expect(page.locator('text=覆盖率仪表盘')).toBeVisible();
+    expect(errors).toEqual([]);
   });
 
   test('COV-207: 项目 ID 不存在 → 不白屏', async ({ page }) => {
@@ -447,12 +425,10 @@ test.describe('异常场景', () => {
   });
 
   test('COV-208: Hash 路由不存在 → 404 兜底', async ({ page }) => {
-    // App.jsx catch-all navigates to /projects/1/coverage
-    await mockApi(page, schemaCoverageData(), statsData(), runsData(5));
     await page.goto('/react-app/#/nonexistent-route');
 
-    // Redirected to coverage dashboard
-    await expect(page.locator('text=覆盖率仪表盘')).toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: '页面不存在' })).toBeVisible();
+    await expect(page.getByRole('link', { name: '返回项目列表' })).toHaveAttribute('href', '/app.html#/projects');
   });
 });
 

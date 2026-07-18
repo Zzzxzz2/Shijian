@@ -89,8 +89,8 @@ class TestFlow2AiPlan:
         page.wait_for_load_state("networkidle")
 
         # 观察加载状态或结果
-        has_results = page.locator(".case-item, .generated-case, #generated-cases").first.is_visible()
-        has_loading = page.locator(".loading, .spinner, [role='progressbar']").first.is_visible()
+        has_results = page.locator("#phase-preview, #preview-list tr").first.is_visible()
+        has_loading = page.locator("#loading-state:not(.hidden)").is_visible()
         assert has_results or has_loading, "提交后既无结果也无加载状态"
 
     @SKIP_AI

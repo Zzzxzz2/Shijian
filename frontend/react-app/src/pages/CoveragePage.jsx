@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams } from 'react-router-dom';
 import api from '../lib/api';
 import CoveragePieChart from '../components/charts/CoveragePieChart';
 import TestTypeBarChart from '../components/charts/TestTypeBarChart';
@@ -29,23 +29,21 @@ export default function CoveragePage() {
     setError(null);
 
     const [coverageData, statsData, runsData] = await Promise.all([
-      api.get(`/api/projects/${projectId}/coverage`),
-      api.get(`/api/projects/${projectId}/stats`),
-      api.get(`/api/projects/${projectId}/runs?limit=20`),
-    ]).catch((err) => {
-      setError(err?.detail || '数据加载失败');
-      return [null, null, []];
-    });
+      api.get(`/api/projects/${projectId}/coverage`).catch(() => null),
+      api.get(`/api/projects/${projectId}/stats`).catch(() => null),
+      api.get(`/api/projects/${projectId}/runs?limit=20`).catch(() => []),
+    ]);
 
     setCoverage(coverageData);
     setStats(statsData);
-    setRuns(Array.isArray(runsData) ? runsData : runsData?.items || []);
+    const runItems = Array.isArray(runsData) ? runsData : runsData?.items || [];
+    setRuns(runItems);
 
     // Set error only when coverage itself failed unexpectedly (not 404 = Simple mode)
     // We detect this: if coverageData is null AND it's not a 404, show a subtle banner.
     // Since `optional` swallows everything, we differentiate via a stored flag.
     // For simplicity: if coverage returned null AND no data from any source, show error.
-    if (!coverageData && !statsData && runsData?.length === 0) {
+    if (!coverageData && !statsData && runItems.length === 0) {
       setError('数据加载失败');
     }
     setLoading(false);
@@ -72,9 +70,12 @@ export default function CoveragePage() {
   const lastRun = runs[0];
   let passRate = null;
   if (lastRun?.summary) {
-    const s = typeof lastRun.summary === 'string' ? JSON.parse(lastRun.summary) : lastRun.summary;
-    const total = (s.pass || 0) + (s.fail || 0);
-    if (total > 0) passRate = Math.round(((s.pass || 0) / total) * 100);
+    let s = lastRun.summary;
+    if (typeof s === 'string') {
+      try { s = JSON.parse(s); } catch { s = null; }
+    }
+    const total = (s?.pass || 0) + (s?.fail || 0);
+    if (total > 0) passRate = Math.round(((s?.pass || 0) / total) * 100);
   }
 
   // Tests by type
@@ -113,15 +114,15 @@ export default function CoveragePage() {
     <div className="max-w-7xl mx-auto px-4 py-8 animate-fade-in">
       {/* ── Header ── */}
       <div className="mb-6">
-        <Link
-          to={`/projects/${projectId}`}
+        <a
+          href={`/app.html#/projects/${projectId}`}
           className="text-sm text-gray-500 hover:text-accent-blue transition-colors inline-flex items-center gap-1 mb-2"
         >
           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
           返回项目
-        </Link>
+        </a>
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-100">覆盖率仪表盘</h1>

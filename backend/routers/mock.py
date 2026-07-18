@@ -20,9 +20,10 @@ from schemas import (
     MockRecordUpdate,
     MockToggleResponse,
 )
+from services.http_security import SENSITIVE_HEADERS
 
 
-_SENSITIVE_HEADERS = {"host", "cookie", "set-cookie", "authorization", "x-api-key", "x-forwarded-for", "content-length"}
+_SENSITIVE_HEADERS = SENSITIVE_HEADERS | {"host", "x-forwarded-for", "content-length"}
 from services.mock.engine import registry
 
 logger = logging.getLogger(__name__)

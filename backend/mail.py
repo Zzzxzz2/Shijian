@@ -8,9 +8,6 @@ import aiosmtplib
 
 logger = logging.getLogger(__name__)
 
-SMTP_HOST = "smtp.qq.com"
-SMTP_PORT = 587
-
 _alert_email: str | None = None
 _auth_code: str | None = None
 
@@ -19,7 +16,7 @@ def _load_config():
     global _alert_email, _auth_code
     if _alert_email is not None:
         return
-    _alert_email = os.getenv("QQ_ALERT_EMAIL", "")
+    _alert_email = os.getenv("QQ_SMTP_USER", "") or os.getenv("QQ_ALERT_EMAIL", "")
     _auth_code = os.getenv("QQ_SMTP_AUTH_CODE", "")
     if not _alert_email or not _auth_code:
         logger.warning("QQ_ALERT_EMAIL or QQ_SMTP_AUTH_CODE not set — emails disabled")
@@ -42,8 +39,8 @@ async def send_email(to: str, subject: str, body: str) -> bool:
     try:
         await aiosmtplib.send(
             msg,
-            hostname=SMTP_HOST,
-            port=SMTP_PORT,
+            hostname=os.getenv("QQ_SMTP_HOST", "smtp.qq.com"),
+            port=int(os.getenv("QQ_SMTP_PORT", "587")),
             username=_alert_email,
             password=_auth_code,
             start_tls=True,
@@ -57,10 +54,10 @@ async def send_email(to: str, subject: str, body: str) -> bool:
 
 async def send_verify_email(to: str, username: str, verify_url: str) -> bool:
     """Send an email verification link."""
-    subject = "试剑 V2 — 邮箱验证"
+    subject = "试剑 V3 — 邮箱验证"
     body = f"""您好 {username}，
 
-感谢您注册试剑 V2。
+感谢您注册试剑 V3。
 
 请点击以下链接验证您的邮箱（链接 24 小时内有效）：
 

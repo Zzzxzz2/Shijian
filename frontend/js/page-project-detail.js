@@ -729,12 +729,13 @@
             ? '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">\u542f\u7528</span>'
             : '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">\u505c\u7528</span>';
           html += '<tr class="border-b border-gray-50">'
-            + '<td class="px-4 py-3 font-medium text-gray-800">' + window.App.utils.escapeHtml(s.tag || '\u5168\u90e8') + '</td>'
+            + '<td class="px-4 py-3 font-medium text-gray-800">' + window.App.utils.escapeHtml(s.suite_id ? '\u6d4b\u8bd5\u96c6 #' + s.suite_id : (s.case_ids || []).length + ' \u4e2a\u7528\u4f8b') + '</td>'
             + '<td class="px-4 py-3 font-mono text-sm text-gray-600">' + window.App.utils.escapeHtml(s.cron_expr) + '</td>'
             + '<td class="px-4 py-3 hidden md:table-cell">' + statusBadge + '</td>'
             + '<td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + (s.last_run_at ? window.App.utils.formatDate(s.last_run_at) : '-') + '</td>'
             + '<td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + (s.next_run_at ? window.App.utils.formatDate(s.next_run_at) : '-') + '</td>'
             + '<td class="px-4 py-3 text-center whitespace-nowrap">'
+            +   '<button class="trigger-schedule text-green-600 hover:text-green-800 text-xs font-medium mr-2" data-id="' + s.id + '">\u7acb\u5373\u6267\u884c</button>'
             +   '<button class="edit-schedule text-primary-600 hover:text-primary-800 text-xs font-medium mr-2" data-idx="' + i + '">\u7f16\u8f91</button>'
             +   '<button class="delete-schedule text-red-500 hover:text-red-700 text-xs font-medium" data-id="' + s.id + '">\u5220\u9664</button>'
             + '</td></tr>';
@@ -742,6 +743,16 @@
         tbody.innerHTML = html;
 
         page._schedulesList = schedules;
+
+        var triggerBtns = tbody.querySelectorAll('.trigger-schedule');
+        for (var t = 0; t < triggerBtns.length; t++) {
+          triggerBtns[t].addEventListener('click', function () {
+            var sid = this.getAttribute('data-id');
+            window.App.api.post('/api/projects/' + page.projectId + '/schedules/' + sid + '/trigger', {})
+              .then(function (result) { window.App.router.navigate('/runs/' + result.run_id); })
+              .catch(function (err) { window.App.utils.showToast(err.detail || '\u6267\u884c\u5931\u8d25', 'error'); });
+          });
+        }
 
         var editBtns = tbody.querySelectorAll('.edit-schedule');
         for (var m = 0; m < editBtns.length; m++) {
@@ -768,7 +779,11 @@
     var isEdit = !!sch;
     document.getElementById('schedule-modal-title').textContent = isEdit ? '\u7f16\u8f91\u8c03\u5ea6' : '\u65b0\u5efa\u8c03\u5ea6';
     document.getElementById('sm-edit-id').value = isEdit ? sch.id : '';
-    document.getElementById('sm-tag').value = isEdit ? (sch.tag || '') : '';
+    var caseSelect = document.getElementById('sm-case-ids');
+    var selected = new Set(isEdit ? (sch.case_ids || []).map(String) : []);
+    caseSelect.innerHTML = (page._casesList || []).map(function (c) {
+      return '<option value="' + c.id + '"' + (selected.has(String(c.id)) ? ' selected' : '') + '>' + window.App.utils.escapeHtml(c.name) + '</option>';
+    }).join('');
     document.getElementById('sm-cron').value = isEdit ? sch.cron_expr : '';
     document.getElementById('sm-enabled').checked = isEdit ? sch.enabled : true;
     document.getElementById('schedule-modal').classList.remove('hidden');
@@ -779,8 +794,10 @@
     var cronExpr = document.getElementById('sm-cron').value.trim();
     if (!cronExpr) { window.App.utils.showToast('\u8bf7\u8f93\u5165 Cron \u8868\u8fbe\u5f0f', 'error'); return; }
 
+    var caseIds = Array.from(document.getElementById('sm-case-ids').selectedOptions).map(function (o) { return Number(o.value); });
+    if (caseIds.length === 0) { window.App.utils.showToast('\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u7528\u4f8b', 'error'); return; }
     var payload = {
-      tag: document.getElementById('sm-tag').value,
+      case_ids: caseIds,
       cron_expr: cronExpr,
       enabled: document.getElementById('sm-enabled').checked,
     };

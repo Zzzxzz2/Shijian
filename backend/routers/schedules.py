@@ -1,6 +1,7 @@
 """定时执行 CRUD + 手动触发。由 services/scheduler.py (APScheduler) 驱动。"""
 
 import logging
+from datetime import datetime, timezone
 
 from apscheduler.triggers.cron import CronTrigger
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -9,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth import get_current_user
 from database import db_retry, get_db
-from models import Schedule, TestRun, TestRunCases, User
+from models import Schedule, TestCase, TestRun, TestRunCases, TestSuite, User
 from routers.deps import require_project_access
 from schemas import ScheduleCreate, ScheduleResponse, ScheduleUpdate
 from services.executor import execute_run
@@ -19,6 +20,35 @@ from services.task_manager import create_task
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects/{pid}/schedules", tags=["schedules"])
+
+
+def _parse_cron(expr: str) -> CronTrigger:
+    try:
+        return CronTrigger.from_crontab(expr, timezone=timezone.utc)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid cron expression")
+
+
+async def _validate_target(
+    pid: int, suite_id: int | None, case_ids: list[int], db: AsyncSession
+) -> None:
+    if suite_id is not None:
+        suite = await db.get(TestSuite, suite_id)
+        if not suite or suite.project_id != pid:
+            raise HTTPException(status_code=400, detail="Suite must belong to this project")
+    requested = set(case_ids)
+    if requested:
+        found = set(
+            (
+                await db.execute(
+                    select(TestCase.id).where(
+                        TestCase.project_id == pid, TestCase.id.in_(requested)
+                    )
+                )
+            ).scalars()
+        )
+        if found != requested:
+            raise HTTPException(status_code=400, detail="Cases must belong to this project")
 
 
 # ── List ──────────────────────────────────────────────────────────────────
@@ -54,14 +84,8 @@ async def create_schedule(
 ):
     await require_project_access(pid, user, db, "editor")
 
-    # 校验 cron 表达式
-    try:
-        CronTrigger.from_crontab(data.cron_expr)
-    except (ValueError, Exception):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid cron expression",
-        )
+    trigger = _parse_cron(data.cron_expr)
+    await _validate_target(pid, data.suite_id, data.case_ids or [], db)
 
     schedule = Schedule(
         project_id=pid,
@@ -69,6 +93,9 @@ async def create_schedule(
         case_ids=data.case_ids or [],
         cron_expr=data.cron_expr,
         enabled=data.enabled,
+        next_run_at=trigger.get_next_fire_time(None, datetime.now(timezone.utc))
+        if data.enabled
+        else None,
     )
     db.add(schedule)
     await db.flush()
@@ -102,7 +129,13 @@ async def update_schedule(
             status_code=status.HTTP_404_NOT_FOUND, detail="Schedule not found"
         )
 
-    if data.suite_id is not None:
+    cron_expr = data.cron_expr or schedule.cron_expr
+    trigger = _parse_cron(cron_expr)
+    suite_id = data.suite_id if "suite_id" in data.model_fields_set else schedule.suite_id
+    case_ids = data.case_ids if data.case_ids is not None else (schedule.case_ids or [])
+    await _validate_target(pid, suite_id, case_ids, db)
+
+    if "suite_id" in data.model_fields_set:
         schedule.suite_id = data.suite_id
     if data.case_ids is not None:
         schedule.case_ids = data.case_ids
@@ -110,6 +143,11 @@ async def update_schedule(
         schedule.cron_expr = data.cron_expr
     if data.enabled is not None:
         schedule.enabled = data.enabled
+    schedule.next_run_at = (
+        trigger.get_next_fire_time(None, datetime.now(timezone.utc))
+        if schedule.enabled
+        else None
+    )
 
     # APScheduler writes via a second SQLite connection, so release our lock first.
     await db.commit()
@@ -183,6 +221,8 @@ async def trigger_schedule(
         )
     else:
         case_rows = schedule.case_ids or []
+
+    await _validate_target(pid, schedule.suite_id, list(case_rows), db)
 
     if not case_rows:
         raise HTTPException(

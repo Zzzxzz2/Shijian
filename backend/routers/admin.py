@@ -161,6 +161,7 @@ async def reset_password(
             status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
         )
     user.password_hash = hash_password(data.new_password)
+    user.token_version = (user.token_version or 0) + 1
     await db.commit()
     await db.refresh(user)
     return AdminUserResponse.model_validate(user)

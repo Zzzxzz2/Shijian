@@ -139,7 +139,8 @@ def test_auth():
     r = api("GET", "/api/auth/me", expect=401)
     check("未登录访问受保护 → 401", r["status"] == 401)
 
-    return token
+    r = api("POST", "/api/auth/login", {"username": username, "password": password})
+    return _extract_token(r["body"])
 
 
 def test_projects(token: str):

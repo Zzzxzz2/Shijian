@@ -20,6 +20,7 @@ from models import ApiKey, Document, Project, TestCase, User
 from routers.deps import require_project_access
 from schemas import QuickTestRequest, QuickTestResponse
 from services.ai_provider import get_provider
+from services.auth_helper import _get_auth_token
 from services.executor import execute_test_case
 from services.task_manager import create_task as _spawn_task
 
@@ -130,6 +131,19 @@ async def _run_quick_test(
     # ── 2. Generate test cases via AI ─────────────────────────────────
     provider = get_provider(project=project, api_keys=list(key_rows))
 
+    auth_headers = None
+    try:
+        token = await _get_auth_token(project.auth_config or {}, project.url or "")
+        if token:
+            auth = project.auth_config or {}
+            auth_headers = {
+                auth.get("header_name", "Authorization"): auth.get(
+                    "header_format", "Bearer {token}"
+                ).format(token=token)
+            }
+    except Exception:
+        logger.warning("Quick-test project authentication failed", exc_info=True)
+
     try:
         result_or_coro = provider.generate_plan(requirement=prompt, context=context)
         plan = await result_or_coro if asyncio.iscoroutine(result_or_coro) else result_or_coro
@@ -174,7 +188,13 @@ async def _run_quick_test(
         })
 
         try:
-            result = await execute_test_case(temp_case, project_url, run_id=0)
+            result = await execute_test_case(
+                temp_case,
+                project_url,
+                run_id=0,
+                auth_headers=auth_headers,
+                project_id=project_id,
+            )
         except Exception as exc:
             logger.exception("Quick-test case #%d failed", i)
             result = {
@@ -239,6 +259,7 @@ async def create_quick_test(
     _spawn_task(
         _run_quick_test(task_id, data.prompt, data.project_id, data.context_doc_ids, current_user.id),
         task_id=task_id,
+        owner_id=current_user.id,
     )
 
     return QuickTestResponse(task_id=task_id, ws_url=ws_url)

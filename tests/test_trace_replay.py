@@ -132,11 +132,19 @@ async def test_trace_001_ui_case_generates_trace_zip():
 async def test_trace_002_trace_zip_http_download(
     async_client: AsyncClient,
     auth_headers: dict[str, str],
+    db_session,
+    test_project,
 ):
     """TRACE-002: trace.zip 可通过 HTTP 下载。"""
     from routers.screenshots import SCREENSHOT_DIR
 
-    run_id = 999002
+    from models import TestRun
+
+    run = TestRun(project_id=test_project.id, status="done")
+    db_session.add(run)
+    await db_session.commit()
+    await db_session.refresh(run)
+    run_id = run.id
     case_key = "test_trace_download"
     trace_dir = os.path.join(SCREENSHOT_DIR, str(run_id), case_key)
     trace_path = os.path.join(trace_dir, "trace.zip")
@@ -497,6 +505,7 @@ async def test_trace_301_unauthenticated_trace_download(
     resp = await async_client.get(
         "/api/screenshots/1/some_key/trace.zip",
     )
+    assert resp.status_code == 401
     if resp.status_code == 401:
         pass
     else:

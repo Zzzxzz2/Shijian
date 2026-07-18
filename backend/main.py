@@ -53,7 +53,7 @@ async def lifespan(_app: FastAPI):
     logger.info("All mock resources shut down")
 
 
-app = FastAPI(title="\u8bd5\u5251 V2", lifespan=lifespan)
+app = FastAPI(title="\u8bd5\u5251 V3", lifespan=lifespan)
 
 
 # ── Global exception handlers ─────────────────────────────────────────────

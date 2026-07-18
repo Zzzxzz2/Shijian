@@ -200,10 +200,10 @@ async def send_verify_link(request: Request):
     base_url = os.getenv("BASE_URL", "http://localhost:8002")
     verify_url = f"{base_url}/api/analytics/verify?token={token}"
 
-    body = f"有人请求查看试剑 V2 浏览统计。\n\n如本人操作，点击：\n{verify_url}\n\n（10 分钟有效）\n非本人请忽略。"
+    body = f"有人请求查看试剑 V3 浏览统计。\n\n如本人操作，点击：\n{verify_url}\n\n（10 分钟有效）\n非本人请忽略。"
 
     msg = MIMEText(body, "plain", "utf-8")
-    msg["Subject"] = "试剑 V2 — 浏览统计验证"
+    msg["Subject"] = "试剑 V3 — 浏览统计验证"
     msg["From"] = os.getenv("QQ_SMTP_USER", "")
     msg["To"] = target
 

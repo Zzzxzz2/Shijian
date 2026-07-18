@@ -15,6 +15,23 @@ from services.task_manager import create_task
 router = APIRouter(prefix="/api/projects/{pid}/suites", tags=["suites"])
 
 
+async def _validate_case_ids(pid: int, case_ids: list[int], db: AsyncSession) -> None:
+    requested = set(case_ids)
+    if not requested:
+        return
+    found = set(
+        (
+            await db.execute(
+                select(TestCase.id).where(
+                    TestCase.project_id == pid, TestCase.id.in_(requested)
+                )
+            )
+        ).scalars()
+    )
+    if found != requested:
+        raise HTTPException(status_code=400, detail="Cases must belong to this project")
+
+
 # ── List ──────────────────────────────────────────────────────────────────
 
 
@@ -61,6 +78,7 @@ async def create_suite(
     db: AsyncSession = Depends(get_db),
 ):
     await require_project_access(pid, user, db, "editor")
+    await _validate_case_ids(pid, data.case_ids or [], db)
 
     suite = TestSuite(project_id=pid, name=data.name, description=data.description)
     db.add(suite)
@@ -150,6 +168,7 @@ async def update_suite(
         suite.description = data.description
 
     if data.case_ids is not None:
+        await _validate_case_ids(pid, data.case_ids, db)
         # 全量替换
         await db.execute(
             TestSuiteCases.__table__.delete().where(TestSuiteCases.suite_id == sid)
@@ -224,6 +243,7 @@ async def run_suite(
 
     if not case_ids:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Suite is empty")
+    await _validate_case_ids(pid, case_ids, db)
 
     # 创建 TestRun
     run = TestRun(project_id=pid, status="pending", source="suite")

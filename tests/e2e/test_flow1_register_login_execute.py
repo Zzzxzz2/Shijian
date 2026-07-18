@@ -12,6 +12,8 @@ NOTE: All tests share ONE session-scoped user to avoid the backend's strict
 registration rate limiter (global 3/day, per-IP 2/day, 10-min cooldown).
 """
 
+import uuid
+
 import pytest
 from conftest import login_and_get_token, create_project, register_user, BASE_URL
 
@@ -95,14 +97,13 @@ class TestFlow1Project:
         # 等待 modal
         page.wait_for_selector("#new-project-modal:not(.hidden)", timeout=5000)
 
-        project_name = f"E2E项目-{test_user['username'][:8]}"
+        project_name = f"E2E项目-{uuid.uuid4().hex[:8]}"
         page.locator("#np-name").fill(project_name)
         page.locator("#np-desc").fill("由 E2E 测试自动创建")
         page.locator("#np-confirm").click()
 
         # 等待项目列表刷新显示新项目
-        page.locator("#project-list tr[data-id]").first.wait_for(timeout=10000)
-        assert page.locator(f"text={project_name}").first.is_visible()
+        page.get_by_text(project_name).first.wait_for(state="visible", timeout=10000)
 
     def test_e2e_004_create_api_case(self, page, base_url, test_user, auth_token):
         """E2E-004: 创建 API 测试用例（通过用例弹窗 #case-modal）。"""
@@ -141,10 +142,37 @@ class TestFlow1Project:
 class TestFlow1Execute:
     """用例执行 + 结果查看。"""
 
-    @pytest.mark.skip(reason="需要后端 mock/LLM 执行引擎，暂基架")
     def test_e2e_005_execute_case(self, page, base_url, test_user, auth_token):
-        """E2E-005: 执行 API 用例（基架）。"""
-        pass
+        """E2E-005: 从项目页选中并执行 API 用例。"""
+        import httpx
+        api = httpx.Client(base_url=BASE_URL, timeout=15)
+        project = api.post(
+            "/api/projects",
+            json={"name": "E2E-005-exec", "url": BASE_URL},
+            headers={"Authorization": f"Bearer {auth_token}"},
+        ).json()
+        case = api.post(
+            f"/api/projects/{project['id']}/cases",
+            json={
+                "name": "E2E-005 健康检查",
+                "test_type": "api",
+                "content": {
+                    "method": "GET",
+                    "url": "/api/health",
+                    "assertions": [{"type": "status_code", "operator": "eq", "expected": 200}],
+                },
+            },
+            headers={"Authorization": f"Bearer {auth_token}"},
+        )
+        assert case.status_code == 201, case.text
+
+        _login_ui(page, base_url, test_user)
+        page.goto(f"{BASE_URL}/app.html#/projects/{project['id']}")
+        page.locator(".case-select").first.wait_for(state="visible", timeout=10000)
+        page.locator(".case-select").first.check()
+        page.locator("#execute-cases-btn").click()
+        page.wait_for_url("**#/runs/*", timeout=15000)
+        page.locator("#case-results").wait_for(state="visible", timeout=10000)
 
     def test_e2e_006_view_run_result(self, page, base_url, test_user, auth_token):
         """E2E-006: 查看执行结果页。"""
@@ -205,7 +233,7 @@ class TestFlow1Execute:
         page.locator("#new-project-btn").click()
         page.wait_for_selector("#new-project-modal:not(.hidden)", timeout=5000)
 
-        project_name = f"完整流程-{test_user['username'][:10]}"
+        project_name = f"完整流程-{uuid.uuid4().hex[:8]}"
         page.locator("#np-name").fill(project_name)
         page.locator("#np-desc").fill("端到端自动测试")
         page.locator("#np-confirm").click()

@@ -47,7 +47,11 @@ async def get_optional_user(
 ) -> User | None:
     if credentials is None:
         return None
-    token = credentials.credentials
+    return await authenticate_token(credentials.credentials, db)
+
+
+async def authenticate_token(token: str, db: AsyncSession) -> User | None:
+    """Return the active user represented by *token*, or ``None``."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         if payload.get("guest"):
@@ -61,6 +65,12 @@ async def get_optional_user(
 
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
+    if user is None:
+        return None
+
+    db_ver = user.token_version if user.token_version is not None else 0
+    if payload.get("ver", 0) != db_ver:
+        return None
     return user
 
 
@@ -73,37 +83,11 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
-    token = credentials.credentials
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id_str: str | None = payload.get("sub")
-        if user_id_str is None:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token",
-            )
-        user_id = int(user_id_str)
-    except (JWTError, ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid token",
-        )
-
-    result = await db.execute(select(User).where(User.id == user_id))
-    user = result.scalar_one_or_none()
+    user = await authenticate_token(credentials.credentials, db)
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
-        )
-
-    # token_version 校验 + None guard（方案B）
-    db_ver = user.token_version if user.token_version is not None else 0
-    token_ver = payload.get("ver", 0)
-    if token_ver != 0 and db_ver != token_ver:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Session expired",
+            detail="Invalid or expired token",
         )
 
     return user

@@ -6,7 +6,7 @@
  *   filter    — optional filter: 'uncovered' (default) | 'covered' | 'all'
  */
 export default function UncoveredList({ endpoints, filter = 'uncovered' }) {
-  const items = (endpoints || []).filter((ep) => {
+  const items = (endpoints || []).filter(Boolean).filter((ep) => {
     if (filter === 'uncovered') return !ep.covered;
     if (filter === 'covered') return ep.covered;
     return true;

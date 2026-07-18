@@ -82,6 +82,7 @@ async def create_case(
         test_type=data.test_type,
         source=data.source,
         content=data.content,
+        skip_auth=data.skip_auth,
         tags=data.tags,
     )
     db.add(case)
@@ -107,6 +108,7 @@ async def create_cases_batch(
             test_type=c.test_type,
             source=c.source,
             content=c.content,
+            skip_auth=c.skip_auth,
             tags=c.tags,
         )
         for c in data.cases
@@ -173,6 +175,8 @@ async def update_case(
         case.test_type = data.test_type
     if data.content is not None:
         case.content = data.content
+    if data.skip_auth is not None:
+        case.skip_auth = data.skip_auth
     if data.tags is not None:
         case.tags = data.tags
 

@@ -19,7 +19,7 @@ class User(Base):
     verified = Column(Boolean, default=False)
     ip_address = Column(String(45), default="")
     token_version = Column(Integer, default=0)
-    notification_config = Column(JSON, default={})
+    notification_config = Column(JSON, default=dict)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     projects = relationship("Project", back_populates="owner")
@@ -40,9 +40,9 @@ class Project(Base):
         onupdate=func.now(),
     )
 
-    auth_config = Column(JSON, default={})
-    ai_config = Column(JSON, default={})
-    notification_config = Column(JSON, default={})
+    auth_config = Column(JSON, default=dict)
+    ai_config = Column(JSON, default=dict)
+    notification_config = Column(JSON, default=dict)
 
     owner = relationship("User", back_populates="projects")
 
@@ -98,7 +98,7 @@ class TestResult(Base):
     run_id = Column(Integer, ForeignKey("test_runs.id"), nullable=False)
     case_id = Column(Integer, ForeignKey("test_cases.id"), nullable=False)
     status = Column(String(20), nullable=False)  # pass / fail / error
-    detail = Column(JSON, default={})
+    detail = Column(JSON, default=dict)
     duration_ms = Column(Float, nullable=True)
 
 
@@ -168,7 +168,7 @@ class Schedule(Base):
     id         = Column(Integer, primary_key=True)
     project_id = Column(Integer, ForeignKey("projects.id"), nullable=False)
     suite_id   = Column(Integer, ForeignKey("test_suites.id"), nullable=True)
-    case_ids   = Column(JSON, default=[])
+    case_ids   = Column(JSON, default=list)
     cron_expr  = Column(String(100), nullable=False)
     enabled    = Column(Boolean, default=True)
     last_run_at = Column(DateTime(timezone=True), nullable=True)
@@ -208,13 +208,13 @@ class MockRecord(Base):
     method            = Column(String(10), nullable=False)
     path              = Column(String(500), nullable=False)
     query_string      = Column(String(1000), default="")
-    request_headers   = Column(JSON, default={})
+    request_headers   = Column(JSON, default=dict)
     request_body      = Column(Text, default="")
     body_type         = Column(String(20), default="text")     # text / json / binary
 
     # ── Response ──
     response_status   = Column(Integer, default=200)
-    response_headers  = Column(JSON, default={})
+    response_headers  = Column(JSON, default=dict)
     response_body     = Column(Text, default="")
     response_body_type = Column(String(20), default="text")
     content_type      = Column(String(100), default="")

@@ -1,16 +1,16 @@
 # 当前状态
 
-更新日期：2026-07-13
+更新日期：2026-07-19
 
 ## 已验证
 
-- 后端模块测试：458 passed、1 skipped、0 failed
+- 后端模块测试：464 passed、0 failed
 - V3 主 E2E：73/73（本公共目录的独立数据库、backend 与内置 target-system）
 - 扩展 E2E：16 个流程、60/60
-- UI 产物：真实 Chromium 执行通过，截图与 Playwright trace 均可下载
-- React：`npm ci` 干净安装、生产构建、`/report/1` 直访与 SPA fallback 通过
+- 原生 SPA：真实 Chromium 18/18，登录、项目/用例、AI Plan、文档、Schema、UI 执行、截图与 Trace 流程通过
+- React：生产构建通过，Chromium 覆盖率页回归 24/24，`/report/1` 直访、未知路由 404 与 401 登录态清理通过
 - Python：全项目 `compileall` 与 `pip check` 通过
-- Compose YAML：三服务配置解析通过；本机 Podman VM 启动故障，未宣称完成镜像构建
+- Compose：CI 配置会校验 YAML 并构建三个镜像；本机未安装 Docker CLI，本轮未宣称完成本地镜像构建
 - Workflow、Contract、Mock、Schedule、权限、Quick Test/WS、截图与 Trace：通过
 - CORS allowlist、未认证 401、500 信息隐藏：通过
 

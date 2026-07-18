@@ -21,7 +21,9 @@ from services.task_manager import _tasks
 
 
 def _token(sub: str = "1") -> str:
-    return create_access_token({"sub": sub})
+    from conftest import WS_TEST_TOKEN
+
+    return WS_TEST_TOKEN
 
 
 def _start_task_qt(sync_client: TestClient, task_id: str, messages: list[dict],

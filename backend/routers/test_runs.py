@@ -299,6 +299,13 @@ async def create_run_by_tag(
 run_lookup_router = APIRouter(prefix="/api/runs", tags=["test-runs"])
 
 
+async def _require_standalone_access(run: TestRun, user: User, db: AsyncSession) -> None:
+    try:
+        await require_project_access(run.project_id, user, db, "viewer")
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+
 @run_lookup_router.get("/{run_id}")
 async def get_run_standalone(
     run_id: int,
@@ -314,12 +321,7 @@ async def get_run_standalone(
             status_code=status.HTTP_404_NOT_FOUND, detail="Run not found"
         )
 
-    # Verify the user owns the project this run belongs to
-    project = await db.get(Project, run.project_id)
-    if not project or project.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Run not found"
-        )
+    await _require_standalone_access(run, current_user, db)
 
     resp = TestRunDetailResponse.model_validate(run)
 
@@ -351,11 +353,7 @@ async def get_run_results_standalone(
             status_code=status.HTTP_404_NOT_FOUND, detail="Run not found"
         )
 
-    project = await db.get(Project, run.project_id)
-    if not project or project.user_id != current_user.id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Run not found"
-        )
+    await _require_standalone_access(run, current_user, db)
 
     rows = (
         (await db.execute(
@@ -393,9 +391,7 @@ async def get_run_diff(
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
 
-    project = await db.get(Project, run.project_id)
-    if not project or project.user_id != current_user.id:
-        raise HTTPException(status_code=404, detail="Run not found")
+    await _require_standalone_access(run, current_user, db)
 
     prev_run = (
         (await db.execute(

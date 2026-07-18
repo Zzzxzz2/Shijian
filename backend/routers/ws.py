@@ -1,16 +1,14 @@
 """WebSocket endpoint for real-time test execution push."""
 
 import asyncio
-import json
 import logging
 
-from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
-from jose import JWTError, jwt
-from sqlalchemy import select
+from fastapi import APIRouter, HTTPException, Query, WebSocket, WebSocketDisconnect
 
-from config import JWT_ALGORITHM, JWT_SECRET
+from auth import authenticate_token
 from database import async_session
 from models import TestRun
+from routers.deps import require_project_access
 from services.task_manager import get_task as _get_task
 
 logger = logging.getLogger(__name__)
@@ -45,14 +43,21 @@ async def broadcast(run_id: int, message: dict):
 
 
 @router.websocket("/ws/runs/{run_id}")
-async def websocket_run(websocket: WebSocket, run_id: int):
-    # Check if run exists
+async def websocket_run(websocket: WebSocket, run_id: int, token: str = Query(...)):
     async with async_session() as db:
+        user = await authenticate_token(token, db)
+        if user is None:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+
         run = await db.get(TestRun, run_id)
         if not run:
-            await websocket.accept()
-            await websocket.send_json({"type": "error", "data": {"message": "Run not found"}})
-            await websocket.close()
+            await websocket.close(code=4004, reason="Run not found")
+            return
+        try:
+            await require_project_access(run.project_id, user, db, "viewer")
+        except HTTPException:
+            await websocket.close(code=4004, reason="Run not found")
             return
 
         # If run already done, send final status and close
@@ -147,24 +152,19 @@ async def websocket_quick_test(
     before accepting the connection.
     """
     # ── Auth: validate JWT token from query string ────────────────────
-    try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        user_id_str: str | None = payload.get("sub")
-        if user_id_str is None:
-            await websocket.close(code=4001, reason="Invalid token")
-            return
-        # Parse user_id (we don't need it here, just verifying the token is valid)
-        _ = int(user_id_str)
-    except (JWTError, ValueError, TypeError) as exc:
-        logger.warning("WS quick-test rejected with invalid token: %s", exc)
+    async with async_session() as db:
+        user = await authenticate_token(token, db)
+    if user is None:
         await websocket.close(code=4001, reason="Invalid token")
         return
 
     # ── Task existence check ──────────────────────────────────────────
     task = _get_task(task_id)
-    if task is None:
+    if task is None or (
+        task.get("owner_id") is not None and task["owner_id"] != user.id
+    ):
         logger.warning("WS quick-test rejected: task %s not found", task_id)
-        await websocket.close(code=4001, reason="Task not found")
+        await websocket.close(code=4004, reason="Task not found")
         return
 
     await qt_connect(task_id, websocket)

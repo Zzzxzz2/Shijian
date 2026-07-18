@@ -59,6 +59,7 @@ async def update_password(
             detail="旧密码不正确",
         )
     current_user.password_hash = hash_password(data.new_password)
+    current_user.token_version = (current_user.token_version or 0) + 1
     await db.commit()
     return {"ok": True}
 

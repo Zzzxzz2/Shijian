@@ -132,7 +132,7 @@ async def register(data: UserRegister, request: Request, db: AsyncSession = Depe
     # ── Send verification email (if email provided) ──────────────────────
     if data.email:
         verify_token = create_access_token({"sub": str(user.id), "email": data.email, "purpose": "verify"})
-        verify_url = f"/app.html#/verify?token={verify_token}"
+        verify_url = f"{str(request.base_url).rstrip('/')}/app.html#/verify?token={verify_token}"
         await send_verify_email(data.email, data.username, verify_url)
 
     token = create_access_token({"sub": str(user.id)}, user=user)
@@ -217,6 +217,7 @@ async def change_password(
             detail="New password must be at least 6 characters",
         )
     current_user.password_hash = hash_password(data.new_password)
+    current_user.token_version = (current_user.token_version or 0) + 1
     await db.commit()
     return {"ok": True}
 
@@ -293,7 +294,7 @@ async def send_verify(
         )
 
     verify_token = create_access_token({"sub": str(current_user.id), "email": email, "purpose": "verify"})
-    verify_url = f"/app.html#/verify?token={verify_token}"
+    verify_url = f"{str(request.base_url).rstrip('/')}/app.html#/verify?token={verify_token}"
     ok = await send_verify_email(email, current_user.username, verify_url)
     if ok:
         _last_send[current_user.username] = now

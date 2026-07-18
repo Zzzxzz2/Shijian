@@ -109,7 +109,11 @@ async def _execute_schedule(schedule_id: int) -> None:
             db.add(TestRunCases(run_id=run.id, case_id=cid))
         await db.commit()
 
-        schedule.last_run_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        schedule.last_run_at = now
+        schedule.next_run_at = CronTrigger.from_crontab(
+            schedule.cron_expr, timezone=timezone.utc
+        ).get_next_fire_time(now, now)
         await db.commit()
 
         # ── 执行 run（同步等待完成）────────────────────────────────────
