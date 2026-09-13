@@ -15,7 +15,7 @@
 
 日志位于忽略提交的 `test-results/release-*.log`。演示使用单独的 `backend/shijian_showcase.db`，没有修改历史验收库或正式业务库；[截图数据口径](SHOWCASE.md) 单独说明。生产密钥在初始化数据库前验证，E2E 初始化禁止生产环境，备份使用 SQLite backup API。
 
-本机没有 Docker 命令，镜像构建依赖 GitHub CI 验证；不能把本地测试通过等同于容器已验证。
+本机没有 Docker 命令，镜像构建依赖 GitHub CI 验证；不能把本地测试通过等同于容器已验证。首次远端检查发现开发依赖遗漏靶场使用的 PyJWT；补齐 PyJWT 与 email-validator，并增加靶场导入预检，避免依赖本机恰好已安装的包。
 
 ## 可靠性迭代已验证（2026-09-13）
 
