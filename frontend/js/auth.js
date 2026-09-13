@@ -7,6 +7,7 @@
   auth.login = function (username, password) {
     return window.App.api.post('/api/auth/login', { username: username, password: password })
       .then(function (data) {
+        localStorage.removeItem('guest');
         localStorage.setItem('token', data.access_token);
         return auth.getUser().then(function () {
           window.App.router.navigate('/projects');
@@ -36,6 +37,7 @@
     return window.App.api.post('/api/auth/guest-token', {})
       .then(function (data) {
         localStorage.setItem('token', data.access_token);
+        localStorage.removeItem('user');
         localStorage.setItem('guest', 'true');
         window.App.router.navigate('/projects');
         window.App.utils.showToast('已进入访客模式', 'success');
@@ -101,6 +103,11 @@
       if (loginLink) loginLink.classList.remove('hidden');
       return;
     }
+    ['nav-api-keys', 'nav-profile', 'nav-token-stats', 'nav-logout'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.classList.remove('hidden');
+    });
+    document.getElementById('nav-login').classList.add('hidden');
     var userData = localStorage.getItem('user');
     if (userData) {
       try {

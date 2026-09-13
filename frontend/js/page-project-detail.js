@@ -21,6 +21,8 @@
     }
     page.projectId = params.id;
     page.currentTab = 'cases';
+    page.caseOffset = 0;
+    page.runOffset = 0;
     page.selectedCases = {};
     page.projectData = null;
     document.getElementById('project-title').textContent = '\u9879\u76ee\u8be6\u60c5';
@@ -70,6 +72,7 @@
     else if (tab === 'runs') page.loadRuns();
     else if (tab === 'schedules') page.loadSchedules();
     else if (tab === 'docs') page.loadDocs();
+    else if (tab === 'schema') window.App.schema.init(page.projectId);
   };
 
   page.bindTabButtons = function () {
@@ -78,11 +81,21 @@
       btns[i].addEventListener('click', function () { page.switchTab(this.getAttribute('data-tab')); });
     }
 
+    ['case', 'run'].forEach(function (kind) {
+      ['prev', 'next'].forEach(function (direction) {
+        document.getElementById(kind + '-' + direction).onclick = function () {
+          page[kind + 'Offset'] = Math.max(0, page[kind + 'Offset'] + (direction === 'next' ? 50 : -50));
+          if (kind === 'case') { page.selectedCases = {}; page.updateSelectionButtons(); page.loadCases(); }
+          else page.loadRuns();
+        };
+      });
+    });
     // Case filter
     var filter = document.getElementById('case-filter');
     if (filter) {
       filter.addEventListener('change', function () {
         page.selectedCases = {};
+        page.caseOffset = 0;
         page.updateSelectionButtons();
         page.loadCases();
       });
@@ -208,6 +221,7 @@
     if (tagFilter) {
       tagFilter.addEventListener('change', function () {
         page.selectedCases = {};
+        page.caseOffset = 0;
         page.updateSelectionButtons();
         page.loadCases();
         var execByTag = document.getElementById('execute-by-tag-btn');
@@ -283,12 +297,19 @@
   };
 
   page.openCaseModal = function (caseData) {
+    page.originalContent = caseData ? JSON.parse(JSON.stringify(caseData.content || {})) : {};
+    page.advancedContent = !!(caseData && ((caseData.content || {}).workflow && caseData.test_type.toLowerCase() === 'api' || caseData.test_type.toLowerCase() === 'perf' || ((caseData.content || {}).assertions || []).some(function (a) { return a.type === 'schema_match'; })));
+    var raw = document.getElementById('cm-raw-content');
+    raw.value = JSON.stringify(page.originalContent, null, 2);
+    document.getElementById('cm-raw-section').classList.toggle('hidden', !page.advancedContent);
     var isEdit = !!caseData;
     document.getElementById('case-modal-title').textContent = isEdit ? '\u7f16\u8f91\u7528\u4f8b' : '\u65b0\u5efa\u7528\u4f8b';
     document.getElementById('cm-edit-id').value = isEdit ? caseData.id : '';
     document.getElementById('cm-name').value = isEdit ? caseData.name : '';
     var type = isEdit ? (caseData.test_type || 'API').toUpperCase() : 'API';
+    if (type === 'PERF') type = 'Perf';
     document.getElementById('cm-type').value = type;
+    document.getElementById('cm-type').disabled = page.advancedContent;
     page.toggleCaseTypeFields(type);
 
     var content = isEdit ? (caseData.content || {}) : {};
@@ -301,7 +322,7 @@
       }
     }
     document.getElementById('cm-headers').value = hdrLines.join('\n');
-    document.getElementById('cm-body').value = content.body ? JSON.stringify(content.body, null, 2) : '';
+    document.getElementById('cm-body').value = content.body !== undefined && content.body !== null ? JSON.stringify(content.body, null, 2) : '';
 
     // Build assertions
     var assertContainer = document.getElementById('cm-assertions');
@@ -375,6 +396,7 @@
     var container = document.getElementById('cm-steps');
     var row = document.createElement('div');
     row.className = 'flex items-center gap-2 step-row';
+    row.originalStep = data || {};
 
     var actionOptions = '<option value="open_app"' + (data && data.action === 'open_app' ? ' selected' : '') + '>open_app</option>'
       + '<option value="navigate"' + (data && data.action === 'navigate' ? ' selected' : '') + '>navigate</option>'
@@ -400,7 +422,7 @@
     var type = document.getElementById('cm-type').value;
     if (!name) return null;
 
-    var content = {};
+    var content = Object.assign({}, page.originalContent || {});
     if (type === 'API') {
       content.method = document.getElementById('cm-method').value;
       content.url = document.getElementById('cm-url').value.trim();
@@ -413,7 +435,8 @@
           if (idx > 0) headers[lines[i].substring(0, idx).trim()] = lines[i].substring(idx + 1).trim();
         }
       }
-      if (Object.keys(headers).length > 0) content.headers = headers;
+      content.headers = headers;
+      content.body = null;
       var bodyText = document.getElementById('cm-body').value.trim();
       if (bodyText) {
         try { content.body = JSON.parse(bodyText); } catch (e) { content.body = bodyText; }
@@ -428,7 +451,7 @@
         var sValue = sr.querySelector('.step-value').value.trim();
         var sScreenshot = sr.querySelector('.step-screenshot').checked;
         if (sAction) {
-          steps.push({ action: sAction, target: sTarget, value: sValue, screenshot: sScreenshot, wait_after: 0.5 });
+          steps.push(Object.assign({}, sr.originalStep, { action: sAction, target: sTarget, value: sValue, screenshot: sScreenshot, wait_after: sr.originalStep.wait_after === undefined ? 0.5 : sr.originalStep.wait_after }));
         }
       }
       content.steps = steps;
@@ -448,7 +471,16 @@
         assertions.push({ type: aType, target: aTarget || 'status_code', operator: aOp, expected: expVal });
       }
     }
-    if (assertions.length > 0) content.assertions = assertions;
+    content.assertions = assertions;
+    if (page.advancedContent) {
+      try {
+        content = JSON.parse(document.getElementById('cm-raw-content').value);
+        if (!content || Array.isArray(content) || typeof content !== 'object') throw new Error('object required');
+      } catch (e) {
+        window.App.utils.showToast('高级内容必须是有效 JSON 对象', 'error');
+        return null;
+      }
+    }
 
     // 标签：逗号分隔转数组，去空白去空
     var tagsStr = document.getElementById('cm-tags').value.trim();
@@ -456,7 +488,7 @@
 
     return {
       name: name,
-      test_type: type,
+      test_type: type.toLowerCase(),
       content: content,
       skip_auth: document.getElementById('cm-skip-auth').checked,
       tags: tags,
@@ -464,6 +496,8 @@
   };
 
   page.saveCase = function () {
+    var saveBtn = document.getElementById("cm-confirm");
+    if (saveBtn.disabled) return;
     var data = page.collectCaseFormData();
     if (!data) { window.App.utils.showToast('\u8bf7\u8f93\u5165\u7528\u4f8b\u540d\u79f0', 'error'); return; }
 
@@ -477,25 +511,39 @@
       method = 'post';
     }
 
+    saveBtn.disabled = true;
     window.App.api[method](url, data)
       .then(function () {
         window.App.utils.showToast(editId ? '\u7528\u4f8b\u5df2\u66f4\u65b0' : '\u7528\u4f8b\u521b\u5efa\u6210\u529f', 'success');
         page.closeCaseModal();
         page.loadCases();
       })
-      .catch(function (err) { window.App.utils.showToast(err.detail || '\u4fdd\u5b58\u5931\u8d25', 'error'); });
+      .catch(function (err) { window.App.utils.showToast(err.detail || '\u4fdd\u5b58\u5931\u8d25', 'error'); })
+      .finally(function () { saveBtn.disabled = false; });
   };
 
   /* ============ Cases List ============ */
   page.loadCases = function () {
     var filter = document.getElementById('case-filter');
     var filterVal = filter ? filter.value : '';
-    var url = '/api/projects/' + page.projectId + '/cases?offset=0&limit=100';
-    if (filterVal) url += '&test_type=' + filterVal;
+    var projectId = page.projectId;
+    var requestId = page.caseRequest = (page.caseRequest || 0) + 1;
+    var url = '/api/projects/' + projectId + '/cases?offset=' + page.caseOffset + '&limit=50';
+    if (filterVal) url += '&test_type=' + encodeURIComponent(filterVal);
+    var tag = document.getElementById('tag-filter').value;
+    if (tag) url += '&tag=' + encodeURIComponent(tag);
 
     window.App.api.get(url)
       .then(function (data) {
+        if (page.projectId !== projectId || requestId !== page.caseRequest || !document.getElementById('case-list')) return;
         var cases = Array.isArray(data) ? data : (data.items || []);
+        var total = data.total === undefined ? cases.length : data.total;
+        if (!cases.length && page.caseOffset > 0) { page.caseOffset = Math.max(0, page.caseOffset - 50); page.loadCases(); return; }
+        document.getElementById('case-page').textContent = '共 ' + total + ' 条 · 第 ' + (page.caseOffset / 50 + 1) + ' 页';
+        document.getElementById('case-prev').disabled = page.caseOffset === 0;
+        document.getElementById('case-next').disabled = page.caseOffset + 50 >= total;
+        document.getElementById('select-all-cases').checked = false;
+        page._casesList = cases;
         var tbody = document.getElementById('case-list');
         if (!tbody) return;
         if (cases.length === 0) {
@@ -505,10 +553,10 @@
         var html = '';
         for (var i = 0; i < cases.length; i++) {
           var c = cases[i];
-          var typeBadge = c.test_type || '-';
+          var typeBadge = (c.test_type || '-').toUpperCase();
           var typeColor = typeBadge === 'API' ? 'bg-blue-100 text-blue-700'
             : typeBadge === 'UI' ? 'bg-purple-100 text-purple-700'
-            : typeBadge === 'Perf' ? 'bg-orange-100 text-orange-700'
+            : typeBadge === 'PERF' ? 'bg-orange-100 text-orange-700'
             : 'bg-gray-100 text-gray-700';
           var checked = page.selectedCases[c.id] ? ' checked' : '';
           var skipBadge = c.skip_auth ? ' <span class="text-xs text-yellow-600 font-medium">(\u8df3\u8fc7\u8ba4\u8bc1)</span>' : '';
@@ -589,16 +637,20 @@
   };
 
   page.executeSelectedCases = function () {
+    if (page.executing) return;
+    var timeoutInput = document.getElementById('run-timeout');
+    if (!timeoutInput.reportValidity()) return;
+    page.executing = true;
     var caseIds = Object.keys(page.selectedCases).map(Number);
-    if (caseIds.length === 0) { window.App.utils.showToast('\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u7528\u4f8b', 'error'); return; }
+    if (caseIds.length === 0) { page.executing = false; window.App.utils.showToast('\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u7528\u4f8b', 'error'); return; }
     window.App.utils.showLoading();
-    window.App.api.post('/api/projects/' + page.projectId + '/runs', { case_ids: caseIds })
+    window.App.api.post('/api/projects/' + page.projectId + '/runs', { case_ids: caseIds, timeout_seconds: Number(timeoutInput.value) })
       .then(function (data) {
         window.App.utils.showToast('\u6267\u884c\u5df2\u521b\u5efa', 'success');
         window.App.router.navigate('/runs/' + data.id);
       })
       .catch(function (err) { window.App.utils.showToast(err.detail || '\u521b\u5efa\u5931\u8d25', 'error'); })
-      .finally(function () { window.App.utils.hideLoading(); });
+      .finally(function () { page.executing = false; window.App.utils.hideLoading(); });
   };
 
   /* ============ CHANGE 4: Batch Delete ============ */
@@ -611,6 +663,7 @@
       .then(function () {
         window.App.utils.showToast('\u5df2\u5220\u9664 ' + caseIds.length + ' \u6761\u7528\u4f8b', 'success');
         page.selectedCases = {};
+        page.caseOffset = 0;
         page.updateSelectionButtons();
         page.loadCases();
       })
@@ -699,10 +752,12 @@
   };
 
   page.executeByTag = function () {
+    var timeoutInput = document.getElementById('run-timeout');
+    if (!timeoutInput.reportValidity()) return;
     var tag = document.getElementById('tag-filter').value;
     if (!tag) { window.App.utils.showToast('\u8bf7\u5148\u9009\u62e9\u6807\u7b7e', 'error'); return; }
     window.App.utils.showLoading();
-    window.App.api.post('/api/projects/' + page.projectId + '/runs/by-tag', { tag: tag })
+    window.App.api.post('/api/projects/' + page.projectId + '/runs/by-tag', { tag: tag, timeout_seconds: Number(timeoutInput.value) })
       .then(function (data) {
         window.App.utils.showToast('\u6267\u884c\u5df2\u521b\u5efa\uff08\u6807\u7b7e: ' + tag + '\uff09', 'success');
         window.App.router.navigate('/runs/' + data.id);
@@ -781,7 +836,11 @@
     document.getElementById('sm-edit-id').value = isEdit ? sch.id : '';
     var caseSelect = document.getElementById('sm-case-ids');
     var selected = new Set(isEdit ? (sch.case_ids || []).map(String) : []);
-    caseSelect.innerHTML = (page._casesList || []).map(function (c) {
+    var choices = (page._casesList || []).slice();
+    selected.forEach(function (id) {
+      if (!choices.some(function (c) { return String(c.id) === id; })) choices.push({id: id, name: '已选用例 #' + id + '（当前筛选或分页外）'});
+    });
+    caseSelect.innerHTML = choices.map(function (c) {
       return '<option value="' + c.id + '"' + (selected.has(String(c.id)) ? ' selected' : '') + '>' + window.App.utils.escapeHtml(c.name) + '</option>';
     }).join('');
     document.getElementById('sm-cron').value = isEdit ? sch.cron_expr : '';
@@ -790,12 +849,14 @@
   };
 
   page.saveSchedule = function () {
+    var saveBtn = document.getElementById("sm-confirm");
+    if (saveBtn.disabled) return;
     var editId = document.getElementById('sm-edit-id').value;
     var cronExpr = document.getElementById('sm-cron').value.trim();
     if (!cronExpr) { window.App.utils.showToast('\u8bf7\u8f93\u5165 Cron \u8868\u8fbe\u5f0f', 'error'); return; }
 
     var caseIds = Array.from(document.getElementById('sm-case-ids').selectedOptions).map(function (o) { return Number(o.value); });
-    if (caseIds.length === 0) { window.App.utils.showToast('\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u7528\u4f8b', 'error'); return; }
+    if (caseIds.length === 0) { page.executing = false; window.App.utils.showToast('\u8bf7\u81f3\u5c11\u9009\u62e9\u4e00\u4e2a\u7528\u4f8b', 'error'); return; }
     var payload = {
       case_ids: caseIds,
       cron_expr: cronExpr,
@@ -811,20 +872,27 @@
       method = 'post';
     }
 
+    saveBtn.disabled = true;
     window.App.api[method](url, payload)
       .then(function () {
         window.App.utils.showToast(editId ? '\u8c03\u5ea6\u5df2\u66f4\u65b0' : '\u8c03\u5ea6\u5df2\u521b\u5efa', 'success');
         document.getElementById('schedule-modal').classList.add('hidden');
         page.loadSchedules();
       })
-      .catch(function (err) { window.App.utils.showToast(err.detail || '\u4fdd\u5b58\u5931\u8d25', 'error'); });
+      .catch(function (err) { window.App.utils.showToast(err.detail || '\u4fdd\u5b58\u5931\u8d25', 'error'); })
+      .finally(function () { saveBtn.disabled = false; });
   };
 
   /* ---- Runs ---- */
   page.loadRuns = function () {
-    window.App.api.get('/api/projects/' + page.projectId + '/runs?offset=0&limit=50')
+    window.App.api.get('/api/projects/' + page.projectId + '/runs?offset=' + page.runOffset + '&limit=50')
       .then(function (data) {
+        if (!document.getElementById('run-page')) return;
         var runs = Array.isArray(data) ? data : (data.items || []);
+        var total = data.total === undefined ? runs.length : data.total;
+        document.getElementById('run-page').textContent = '共 ' + total + ' 次 · 第 ' + (page.runOffset / 50 + 1) + ' 页';
+        document.getElementById('run-prev').disabled = page.runOffset === 0;
+        document.getElementById('run-next').disabled = page.runOffset + 50 >= total;
         var tbody = document.getElementById('run-list');
         if (!tbody) return;
         if (runs.length === 0) {
@@ -839,12 +907,14 @@
             : r.status === 'running' ? 'bg-yellow-100 text-yellow-700'
             : r.status === 'queued' ? 'bg-blue-100 text-blue-700'
             : 'bg-gray-100 text-gray-700';
-          var statusLabel = r.status === 'done' ? (r.result || 'done') : r.status;
+          var statusLabel = r.status === 'done' ? (r.result === 'pass' ? '通过' : '未通过') : ({pending: '排队中', cancelled: '已取消', timeout: '执行超时', interrupted: '执行中断', queued: '排队中', running: '执行中', failed: '执行异常'}[r.status] || r.status);
+          var summaryText = '-';
+          try { var summary = JSON.parse(r.summary || '{}'); summaryText = '通过 ' + (summary.pass || 0) + ' · 失败 ' + (summary.fail || 0) + ' · 错误 ' + (summary.error || 0); } catch (e) { summaryText = '摘要不可用'; }
           html += '<tr class="border-b border-gray-50 hover:bg-gray-50 cursor-pointer run-row" data-run-id="' + r.id + '">'
             + '<td class="px-4 py-3"><span class="inline-block px-2 py-0.5 rounded text-xs font-medium ' + statusColor + '">' + window.App.utils.escapeHtml(statusLabel) + '</span></td>'
             + '<td class="px-4 py-3 text-gray-600">' + window.App.utils.formatDate(r.created_at) + '</td>'
-            + '<td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + window.App.utils.escapeHtml(r.summary || '-') + '</td>'
-            + '<td class="px-4 py-3 text-center"><span class="text-xs text-gray-400">\u67e5\u770b</span></td></tr>';
+            + '<td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + window.App.utils.escapeHtml(summaryText) + '</td>'
+            + '<td class="px-4 py-3 text-center"><a class="text-xs text-primary-600" href="#/runs/' + r.id + '">查看报告</a></td></tr>';
         }
         tbody.innerHTML = html;
 

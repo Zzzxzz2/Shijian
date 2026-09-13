@@ -6,11 +6,13 @@ import re
 import time
 import asyncio
 import base64
+import logging
+from types import SimpleNamespace
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +20,8 @@ from database import async_session
 from models import Project, TestCase, TestResult, TestRun, TestRunCases
 from routers.ws import broadcast
 from services.auth_helper import _get_auth_token
-from services.http_security import redact_headers
+from services.http_security import redact_headers, redact_data
+from services.run_history import capture_snapshot, read_snapshot
 from services.mock.engine import registry
 from services.ui_executor import execute_ui_case
 from services.perf_executor import execute_perf_case
@@ -273,6 +276,8 @@ async def _execute_workflow(steps: list[dict], project_url: str, project_id: int
 
         # 1. 替换模板变量
         url = _render(step["url"], context)
+        if project_url:
+            url = _resolve_url(url, project_url)
         headers = {k: _render(v, context) for k, v in step.get("headers", {}).items()}
         body = _render_value(step.get("body"), context)
 
@@ -288,6 +293,8 @@ async def _execute_workflow(steps: list[dict], project_url: str, project_id: int
                 resp_body = resp.text
 
             detail = {
+                "method": step["method"],
+                "request_url": url,
                 "status_code": resp.status_code,
                 "response_headers": redact_headers(resp.headers),
                 "response_body": resp_body,
@@ -306,6 +313,7 @@ async def _execute_workflow(steps: list[dict], project_url: str, project_id: int
         # 3. 检查断言
         step_result: dict[str, Any] = {
             "name": step.get("name", ""),
+            "detail": detail,
             "status": "pass",
             "assertions": [],
             "duration_ms": round((time.monotonic() - step_start) * 1000, 2),
@@ -332,8 +340,8 @@ async def _execute_workflow(steps: list[dict], project_url: str, project_id: int
 
     return {
         "status": overall_status,
-        "detail": {"steps": results},
-        "duration_ms": round(total_ms, 2),
+        "detail": {"steps": results, "failure_category": "assertion_failed" if overall_status == "fail" else "execution_error" if overall_status == "error" else ""},
+        "duration_ms": round(sum(item["duration_ms"] for item in results), 2),
     }
 
 
@@ -493,154 +501,134 @@ async def execute_test_case(case: TestCase, project_url: str, run_id: int = 0,
         }
 
 
-async def _execute_run(run_id: int) -> dict:
-    """Execute all cases in a TestRun. Updates DB with results."""
+ACTIVE_RUN_STATUSES = ("queued", "pending", "running")
+_active_runs: dict[int, asyncio.Task] = {}
+logger = logging.getLogger(__name__)
+
+
+async def finish_run(run_id: int, status: str, reason: str):
+    """Seal an active run once; a late worker cannot overwrite a terminal state."""
     async with async_session() as db:
-        # Load run + project
         run = await db.get(TestRun, run_id)
-        if not run:
-            return {"error": "Run not found"}
-
-        project = await db.get(Project, run.project_id)
-        project_url = project.url if project else ""
-
-        # Clean up old screenshots (>7 days)
-        await cleanup_old_screenshots(db)
-
-        # Update status to running
-        run.status = "running"
-        run.started_at = datetime.now(timezone.utc)
+        if not run or run.status not in ACTIVE_RUN_STATUSES:
+            return
+        links = list((await db.execute(select(TestRunCases.case_id).where(TestRunCases.run_id == run_id))).scalars())
+        rows = list((await db.execute(select(TestResult.status).where(TestResult.run_id == run_id))).scalars())
+        summary = {"total": len(set(links)), "pass": rows.count("pass"), "fail": rows.count("fail"), "error": rows.count("error"), "skipped": max(0, len(set(links)) - len(rows))}
+        changed = await db.execute(update(TestRun).where(TestRun.id == run_id, TestRun.status.in_(ACTIVE_RUN_STATUSES)).values(
+            status=status, result="error", termination_reason=reason, finished_at=datetime.now(timezone.utc), summary=json.dumps(summary)))
         await _commit_with_retry(db)
+    if changed.rowcount:
+        await broadcast(run_id, {"type": "run_done", "data": {"status": status, "result": "error"}})
 
-        # Load associated cases
-        case_ids = (
-            (await db.execute(
-                select(TestRunCases.case_id).where(TestRunCases.run_id == run_id)
-            ))
-            .scalars()
-            .all()
-        )
 
-        cases = (
-            (await db.execute(
-                select(TestCase).where(TestCase.id.in_(case_ids))
-            ))
-            .scalars()
-            .all()
-        )
+async def recover_interrupted_runs():
+    # ponytail: single process ownership; add worker leases before multi-worker deployment.
+    async with async_session() as db:
+        ids = list((await db.execute(select(TestRun.id).where(TestRun.status.in_(ACTIVE_RUN_STATUSES)))).scalars())
+    for run_id in ids:
+        await finish_run(run_id, "interrupted", "服务重启，原执行已中断；已保留完成结果，未自动重放请求。")
+    if ids:
+        logger.warning("Marked %d interrupted runs during startup", len(ids))
+    return len(ids)
 
-        # ── Auth token injection ──────────────────────────────────────
+
+async def cancel_run_execution(run_id: int):
+    await finish_run(run_id, "cancelled", "用户取消执行；已发出的请求可能已在被测系统生效。")
+    task = _active_runs.get(run_id)
+    if task and not task.done():
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+
+
+async def shutdown_runs():
+    tasks = list(_active_runs.values())
+    for task in tasks:
+        task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+    await recover_interrupted_runs()
+
+
+async def _execute_run(run_id: int) -> dict:
+    async with async_session() as db:
+        run = await db.get(TestRun, run_id)
+        if not run or run.status not in ("queued", "pending"):
+            return {"status": run.status if run else "missing"}
+        snapshot = await capture_snapshot(db, run, origin="legacy_at_start")
+        claimed = await db.execute(update(TestRun).where(TestRun.id == run_id, TestRun.status.in_(("queued", "pending"))).values(status="running", started_at=datetime.now(timezone.utc)))
+        if not claimed.rowcount:
+            await db.rollback()
+            return {"status": "not_claimed"}
+        await _commit_with_retry(db)
+        project = snapshot["project"]
+        cases = [SimpleNamespace(**case) for case in snapshot["cases"]]
+        project_url = project["url"] or ""
+        await cleanup_old_screenshots(db)
         auth_headers = None
         try:
-            token = await _get_auth_token(project.auth_config or {}, project.url or "")
+            auth = project["auth_config"]
+            token = await _get_auth_token(auth, project_url)
             if token:
-                auth = project.auth_config or {}
-                header_name = auth.get("header_name", "Authorization")
-                header_value = auth.get("header_format", "Bearer {token}").format(token=token)
-                auth_headers = {header_name: header_value}
+                auth_headers = {auth.get("header_name", "Authorization"): auth.get("header_format", "Bearer {token}").format(token=token)}
         except Exception:
-            pass  # Auth failure shouldn't block the entire run
-
-        results_summary = {"total": len(cases), "pass": 0, "fail": 0, "error": 0}
-
-        # Execute each case
+            logger.warning("Authentication injection failed for run %s", run_id)
+        summary = {"total": len(cases), "pass": 0, "fail": 0, "error": 0, "skipped": len(cases)}
         for idx, case in enumerate(cases):
-            # Check if run was cancelled mid-execution
-            current_run = await db.get(TestRun, run_id)
-            if current_run and current_run.status == "cancelled":
-                break
-
-            headers_for_case = auth_headers if not getattr(case, 'skip_auth', False) else None
+            await db.refresh(run)
+            if run.status != "running":
+                return summary
             try:
-                result = await execute_test_case(
-                    case,
-                    project_url,
-                    run_id,
-                    auth_headers=headers_for_case,
-                    project_id=run.project_id,
-                )
-            except Exception as exc:
-                result = {
-                    "status": "error",
-                    "detail": {"error": str(exc), "failure_category": "internal_error"},
-                    "duration_ms": 0,
-                    "error": str(exc),
-                }
-
-            # Save TestResult
-            test_result = TestResult(
-                run_id=run_id,
-                case_id=case.id,
-                status=result["status"],
-                detail=result["detail"],
-                duration_ms=result["duration_ms"],
-            )
-            db.add(test_result)
-
-            results_summary[result["status"]] = results_summary.get(result["status"], 0) + 1
-
-            # Broadcast case_done
-            try:
-                await broadcast(run_id, {
-                    "type": "case_done",
-                    "data": {
-                        "case_id": case.id,
-                        "case_name": case.name,
-                        "status": result["status"],
-                        "duration_ms": result["duration_ms"],
-                        "detail": result["detail"],
-                    },
-                })
+                result = await execute_test_case(case, project_url, run_id, auth_headers=auth_headers if not case.skip_auth else None, project_id=run.project_id)
             except Exception:
-                pass
-
-            # Broadcast progress
-            try:
-                await broadcast(run_id, {
-                    "type": "progress",
-                    "data": {
-                        "total": len(cases),
-                        "done": idx + 1,
-                        "passed": results_summary.get("pass", 0),
-                        "failed": results_summary.get("fail", 0) + results_summary.get("error", 0),
-                    },
-                })
-            except Exception:
-                pass
-
-        # Update run status
-        run.finished_at = datetime.now(timezone.utc)
-        run.status = "done"
-        run.result = "pass" if results_summary.get("fail", 0) == 0 and results_summary.get("error", 0) == 0 else "fail"
-        run.summary = json.dumps(results_summary)
+                logger.exception("Case %s in run %s failed unexpectedly", case.id, run_id)
+                result = {"status": "error", "detail": {"error": "执行器异常，请查看服务日志", "failure_category": "internal_error"}, "duration_ms": 0}
+            summary[result["status"]] += 1
+            summary["skipped"] = len(cases) - idx - 1
+            # The status check and result insert share one write transaction.
+            changed = await db.execute(update(TestRun).where(TestRun.id == run_id, TestRun.status == "running").values(summary=json.dumps(summary)))
+            if not changed.rowcount:
+                await db.rollback()
+                return summary
+            detail = redact_data(result["detail"])
+            db.add(TestResult(run_id=run_id, case_id=case.id, status=result["status"], detail=detail, duration_ms=result["duration_ms"]))
+            await _commit_with_retry(db)
+            await broadcast(run_id, {"type": "case_done", "data": {"case_id": case.id, "case_name": case.name, "status": result["status"], "duration_ms": result["duration_ms"], "detail": detail}})
+            await broadcast(run_id, {"type": "progress", "data": {"total": len(cases), "done": idx + 1, "passed": summary["pass"], "failed": summary["fail"] + summary["error"]}})
+        result_status = "pass" if summary["fail"] == 0 and summary["error"] == 0 else "fail"
+        changed = await db.execute(update(TestRun).where(TestRun.id == run_id, TestRun.status == "running").values(status="done", result=result_status, finished_at=datetime.now(timezone.utc), summary=json.dumps(summary)))
         await _commit_with_retry(db)
-
-        # Broadcast run_done
-        try:
-            await broadcast(run_id, {
-                "type": "run_done",
-                "data": {"status": run.status, "result": run.result},
-            })
-        except Exception:
-            pass
-
-        return results_summary
+        if changed.rowcount:
+            await broadcast(run_id, {"type": "run_done", "data": {"status": "done", "result": result_status}})
+        return summary
 
 
 async def execute_run(run_id: int) -> dict:
-    """Execute a run and guarantee that an unexpected run-level failure is finalized."""
+    """Bound the whole execution, including auth and Workflow, with a wall-clock deadline."""
+    if run_id in _active_runs:
+        return {"status": "already_running"}
+    async with async_session() as db:
+        run = await db.get(TestRun, run_id)
+        if not run or run.status not in ("queued", "pending"):
+            return {"status": run.status if run else "missing"}
+        timeout = run.timeout_seconds or 300
+    task = asyncio.create_task(_execute_run(run_id))
+    _active_runs[run_id] = task
     try:
-        return await _execute_run(run_id)
-    except Exception as exc:
-        async with async_session() as db:
-            run = await db.get(TestRun, run_id)
-            if run is not None:
-                run.status = "failed"
-                run.result = "error"
-                run.finished_at = datetime.now(timezone.utc)
-                run.summary = json.dumps({"total": 0, "pass": 0, "fail": 0, "error": 1})
-                await _commit_with_retry(db)
-        return {"error": str(exc)}
+        return await asyncio.wait_for(task, timeout=timeout)
+    except asyncio.TimeoutError:
+        await finish_run(run_id, "timeout", f"执行超过总时限 {timeout} 秒；保留已完成结果。")
+        return {"status": "timeout"}
+    except asyncio.CancelledError:
+        await finish_run(run_id, "interrupted", "执行被中断；保留已完成结果，未自动重放请求。")
+        return {"status": "interrupted"}
+    except Exception:
+        logger.exception("Run %s failed unexpectedly", run_id)
+        await finish_run(run_id, "failed", "执行器异常，请查看服务日志。")
+        return {"status": "failed"}
+    finally:
+        if _active_runs.get(run_id) is task:
+            _active_runs.pop(run_id, None)
 
 
 async def cleanup_old_screenshots(db: AsyncSession) -> None:

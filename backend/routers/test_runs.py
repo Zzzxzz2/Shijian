@@ -1,6 +1,9 @@
 """TestRun CRUD + results."""
 
+from services.run_history import capture_snapshot, public_snapshot
+
 from datetime import datetime, timezone
+import json
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.responses import HTMLResponse
@@ -19,8 +22,9 @@ from schemas import (
     TestRunDetailResponse,
     TestRunResponse,
 )
-from services.executor import execute_run
+from services.executor import execute_run, cancel_run_execution, ACTIVE_RUN_STATUSES
 from services.report_service import generate_run_report
+from services.http_security import redact_data
 from services.task_manager import create_task
 
 router = APIRouter(prefix="/api/projects/{pid}/runs", tags=["test-runs"])
@@ -56,13 +60,14 @@ async def create_run(
             detail=f"Cases not found: {missing}",
         )
 
-    run = TestRun(project_id=pid, status="queued")
+    run = TestRun(project_id=pid, status="queued", timeout_seconds=data.timeout_seconds)
     db.add(run)
     await db.flush()  # get run.id
 
-    for cid in data.case_ids:
+    for cid in dict.fromkeys(data.case_ids):
         db.add(TestRunCases(run_id=run.id, case_id=cid))
 
+    await capture_snapshot(db, run)
     await db.commit()
     await db.refresh(run)
 
@@ -126,7 +131,8 @@ async def get_run(
         )
     ).scalars().all()
 
-    resp.cases = [TestCaseResponse.model_validate(c).model_dump() for c in link_rows]
+    resp.snapshot = public_snapshot(run)
+    resp.cases = [TestCaseResponse.model_validate(c) for c in resp.snapshot["cases"]] if resp.snapshot else [TestCaseResponse.model_validate(c) for c in link_rows]
     return resp
 
 
@@ -200,6 +206,9 @@ async def get_run_results(
         )
         name_map = {r["id"]: r["name"] for r in case_rows}
 
+    snapshot = public_snapshot(run)
+    if snapshot:
+        name_map.update({c["id"]: c["name"] for c in snapshot["cases"]})
     # 组装
     results = []
     for r in rows:
@@ -208,9 +217,9 @@ async def get_run_results(
             change = "new"
         elif prev == r.status:
             change = "unchanged"
-        elif prev == "pass" and r.status == "fail":
+        elif prev == "pass" and r.status in ("fail", "error"):
             change = "regression"
-        elif prev == "fail" and r.status == "pass":
+        elif prev in ("fail", "error") and r.status == "pass":
             change = "fixed"
         else:
             change = "changed"
@@ -222,7 +231,7 @@ async def get_run_results(
                 case_id=r.case_id,
                 name=name_map.get(r.case_id, ""),
                 status=r.status,
-                detail=r.detail,
+                detail=redact_data(r.detail),
                 duration_ms=r.duration_ms,
                 failure_category=(r.detail or {}).get("failure_category", ""),
                 prev_status=prev,
@@ -272,7 +281,7 @@ async def create_run_by_tag(
         )
 
     base = select(TestCase).where(TestCase.project_id == pid)
-    base = base.where(cast(TestCase.tags, String).contains(f'"{tag}"'))
+    base = base.where(cast(TestCase.tags, String).contains(json.dumps(tag), autoescape=True))
     cases = (await db.execute(base)).scalars().all()
 
     if not cases:
@@ -281,18 +290,50 @@ async def create_run_by_tag(
             detail=f"No cases found with tag '{tag}'",
         )
 
-    run = TestRun(project_id=pid, status="queued")
+    run = TestRun(project_id=pid, status="queued", timeout_seconds=data.timeout_seconds)
     db.add(run)
     await db.flush()
 
     for c in cases:
         db.add(TestRunCases(run_id=run.id, case_id=c.id))
 
+    await capture_snapshot(db, run)
     await db.commit()
     await db.refresh(run)
 
     create_task(execute_run(run.id), task_id=f"run-{run.id}")
     return TestRunResponse.model_validate(run)
+
+
+@router.post("/{run_id}/cancel")
+async def cancel_run(pid: int, run_id: int, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    await require_project_access(pid, current_user, db, "editor")
+    run = await db.get(TestRun, run_id)
+    if not run or run.project_id != pid:
+        raise HTTPException(status_code=404, detail="Run not found")
+    await cancel_run_execution(run_id)
+    await db.refresh(run)
+    return TestRunResponse.model_validate(run)
+
+
+@router.post("/{run_id}/retry-failed", status_code=status.HTTP_201_CREATED)
+async def retry_failed_run(
+    pid: int, run_id: int, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retry only failed/error cases that still exist in this project."""
+    await require_project_access(pid, current_user, db, "editor")
+    run = await db.get(TestRun, run_id)
+    if not run or run.project_id != pid:
+        raise HTTPException(status_code=404, detail="Run not found")
+    if run.status in ACTIVE_RUN_STATUSES:
+        raise HTTPException(status_code=409, detail="请等待执行结束后再重跑")
+    ids = list((await db.execute(select(TestResult.case_id).join(TestCase, TestCase.id == TestResult.case_id).where(
+        TestResult.run_id == run_id, TestResult.status.in_(("fail", "error")), TestCase.project_id == pid
+    ).distinct())).scalars())
+    if not ids:
+        raise HTTPException(status_code=400, detail="没有可重跑的失败用例，或原用例已删除")
+    return await create_run(pid, TestRunCreate(case_ids=ids, timeout_seconds=run.timeout_seconds), db, current_user)
 
 
 # ── Standalone run lookup (no project_id needed) ────────────────────────
@@ -334,7 +375,8 @@ async def get_run_standalone(
         )
     ).scalars().all()
 
-    resp.cases = [TestCaseResponse.model_validate(c).model_dump() for c in link_rows]
+    resp.snapshot = public_snapshot(run)
+    resp.cases = [TestCaseResponse.model_validate(c) for c in resp.snapshot["cases"]] if resp.snapshot else [TestCaseResponse.model_validate(c) for c in link_rows]
     return resp
 
 
@@ -370,7 +412,7 @@ async def get_run_results_standalone(
             run_id=r.run_id,
             case_id=r.case_id,
             status=r.status,
-            detail=r.detail,
+            detail=redact_data(r.detail),
             duration_ms=r.duration_ms,
             failure_category=(r.detail or {}).get("failure_category", ""),
         ).model_dump()
@@ -429,19 +471,23 @@ async def get_run_diff(
     new_passes = 0
     unchanged = 0
 
+    snapshot = public_snapshot(run)
+    names = {c["id"]: c["name"] for c in snapshot["cases"]} if snapshot else {}
     for r in current_results:
         case = await db.get(TestCase, r.case_id)
-        case_name = case.name if case else f"Case #{r.case_id}"
+        case_name = names.get(r.case_id) or (case.name if case else f"Case #{r.case_id}")
         prev_status = prev_results_map.get(r.case_id)
 
         if prev_status is None:
             status_str = "new_case"
-        elif r.status == "fail" and prev_status == "pass":
+        elif r.status in ("fail", "error") and prev_status == "pass":
             status_str = "new_failure"
             new_failures += 1
-        elif r.status == "pass" and prev_status == "fail":
+        elif r.status == "pass" and prev_status in ("fail", "error"):
             status_str = "new_pass"
             new_passes += 1
+        elif r.status != prev_status:
+            status_str = "changed"
         else:
             status_str = "unchanged"
             unchanged += 1
@@ -476,6 +522,8 @@ async def delete_run(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Run not found"
         )
+    if run.status in ACTIVE_RUN_STATUSES:
+        raise HTTPException(status_code=409, detail="执行中的任务不能删除，请等待任务结束")
     await db.delete(run)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)

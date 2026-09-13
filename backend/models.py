@@ -40,6 +40,7 @@ class Project(Base):
         onupdate=func.now(),
     )
 
+    schema_endpoints = Column(JSON, default=list)
     auth_config = Column(JSON, default=dict)
     ai_config = Column(JSON, default=dict)
     notification_config = Column(JSON, default=dict)
@@ -77,6 +78,9 @@ class TestRun(Base):
     status = Column(String(20), default="queued")  # queued/pending/running/done/failed/cancelled/timeout
     result = Column(String(20), nullable=True)  # pass / fail / error
     source = Column(String(20), default="")     # manual / suite / ai_plan
+    timeout_seconds = Column(Integer, default=300, nullable=False)
+    termination_reason = Column(Text, nullable=True)
+    snapshot_encrypted = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
     started_at = Column(DateTime(timezone=True), nullable=True)
     finished_at = Column(DateTime(timezone=True), nullable=True)

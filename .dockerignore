@@ -15,3 +15,17 @@ backend/uploads
 backend/screenshots
 docs/images
 tests
+
+.env.*
+**/.env
+**/.env.*
+**/.mcp.json
+**/*.sqlite*
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.har
+**/*trace*.zip
+resume_project_pack
+backups

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,8 +22,8 @@ router = APIRouter(prefix="/api/projects", tags=["projects"])
 @router.get("")
 async def list_projects(
     search: str = "",
-    offset: int = 0,
-    limit: int = 20,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=200),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -56,11 +56,17 @@ async def list_projects(
     )
     rows = (await db.execute(rows_q)).scalars().all()
 
+    project_ids = [r.id for r in rows]
+    counts = dict((await db.execute(select(TestCase.project_id, func.count(TestCase.id)).where(
+        TestCase.project_id.in_(project_ids)).group_by(TestCase.project_id))).all())
+    latest_ids = select(func.max(TestRun.id)).where(TestRun.project_id.in_(project_ids)).group_by(TestRun.project_id)
+    latest = {r.project_id: {"id": r.id, "status": r.status, "result": r.result}
+              for r in (await db.execute(select(TestRun).where(TestRun.id.in_(latest_ids)))).scalars()}
     return {
         "items": [
             ProjectResponse.model_validate(r)
             .model_copy(update={"auth_config": {}, "ai_config": {}})
-            .model_dump()
+            .model_dump() | {"case_count": counts.get(r.id, 0), "latest_run": latest.get(r.id)}
             for r in rows
         ],
         "total": total,
@@ -190,24 +196,32 @@ async def get_project_coverage(
     current_user: User = Depends(get_current_user),
 ):
     """Return the coverage dashboard contract for schema-generated cases."""
-    await require_project_access(id, current_user, db, "viewer")
+    project = await require_project_access(id, current_user, db, "viewer")
     cases = (await db.execute(select(TestCase).where(TestCase.project_id == id))).scalars().all()
-    endpoints = []
     type_counts: dict[str, int] = {}
+    covered_keys = set()
     for case in cases:
-        type_counts[case.test_type] = type_counts.get(case.test_type, 0) + 1
-        key = (case.content or {}).get("coverage_key", "")
-        if key:
-            endpoints.append({"key": key, "covered": True, "name": case.name})
-    covered = sum(1 for endpoint in endpoints if endpoint["covered"])
+        case_type = case.test_type.lower()
+        type_counts[case_type] = type_counts.get(case_type, 0) + 1
+        key = (case.content or {}).get("coverage_key")
+        if isinstance(key, str) and key:
+            covered_keys.add(key)
+    # Coverage means a saved case exists, not that the endpoint has passed testing.
+    catalog = project.schema_endpoints or []
+    endpoints = [{**endpoint, "key": endpoint["method"] + " " + endpoint["path"],
+                  "covered": endpoint["method"] + " " + endpoint["path"] in covered_keys}
+                 for endpoint in catalog]
+    covered = sum(endpoint["covered"] for endpoint in endpoints)
     return {
-        "mode": "schema" if endpoints else "simple",
+        "mode": "schema" if catalog else "simple",
         "endpoints": endpoints,
         "endpoints_total": len(endpoints),
         "endpoints_covered": covered,
         "endpoints_uncovered": len(endpoints) - covered,
         "tests_by_type": type_counts,
+        "definition": "当前 OpenAPI 基线中已有保存用例的端点比例；不代表通过率或代码覆盖率",
     }
+
 
 
 @router.post("/{id}/test-auth")

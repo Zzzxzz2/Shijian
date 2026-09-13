@@ -15,6 +15,7 @@ RUN pip install --no-cache-dir -r requirements.txt \
 
 COPY --chown=app:app backend/ /app/backend/
 COPY --chown=app:app frontend/ /app/frontend/
+COPY --chown=app:app scripts/backup_sqlite.py /app/scripts/backup_sqlite.py
 
 WORKDIR /app/backend
 USER app

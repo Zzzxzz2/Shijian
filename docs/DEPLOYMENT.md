@@ -61,14 +61,32 @@ curl http://127.0.0.1:8003/
 
 ## 更新与备份
 
+升级前保存数据库、uploads、screenshots，并单独安全保管加密密钥。密钥丢失后无法读取已加密的 API Key 和执行快照。
+
+镜像包含 SQLite backup API 工具，支持读取运行中 WAL 内已提交的数据；不会自动删除旧备份：
+
 ```bash
-docker compose pull
+docker compose exec -T backend python /app/scripts/backup_sqlite.py /data/shijian.db --output-dir /data/backups
+docker compose cp backend:/data/backups ./backups
+# 确认备份保存成功后更新
 docker compose up --build -d
-docker run --rm -v shijian-data:/data -v "$PWD:/backup" alpine \
-  cp /data/shijian.db /backup/shijian-$(date +%F).db
 ```
 
-升级前同时备份数据库、uploads 和 screenshots volumes。SQLite 文件备份应在停止写入或使用 SQLite backup API 时执行；Windows 本地可使用 `scripts/backup.ps1`。
+Windows 本地（默认数据库为仓库内 backend/shijian.db）：
+
+```powershell
+./scripts/backup.ps1
+# 自定义本地数据库
+./scripts/backup.ps1 -DatabasePath ./backend/shijian_review.db
+```
+
+跨平台也可执行 `python scripts/backup_sqlite.py <数据库路径> --output-dir ./backups`。工具以只读方式打开源库，先生成临时备份并检查完整性，再发布备份文件；不直接复制正在写入的数据库文件。不自动清理备份，请按保留需求另行管理。
+
+恢复时先停止应用，将选定备份恢复到目标数据库位置，并使用对应的原加密密钥；在隔离环境确认可读后再替换正式数据。备份、密钥和运行记录均不得提交 Git。
+
+## 测试账号隔离
+
+`backend/bootstrap_e2e.py` 仅用于扩展 E2E，会重设固定测试用户。现在要求显式设置 `DATABASE_URL`，且 `ENV=production` 时拒绝执行；禁止指向正式数据库。生产 JWT 至少 32 字符且不能使用示例/开发值，AES Key 在服务初始化数据库之前验证。
 
 ## 生产限制
 

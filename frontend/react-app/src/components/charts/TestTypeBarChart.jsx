@@ -51,7 +51,7 @@ export default function TestTypeBarChart({ testsByType }) {
 
   const options = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     plugins: {
       legend: { display: false },
       tooltip: {
@@ -84,7 +84,7 @@ export default function TestTypeBarChart({ testsByType }) {
   return (
     <div className="chart-container">
       <h3 className="text-sm font-medium text-gray-400 mb-3">用例分布</h3>
-      <Bar data={data} options={options} />
+      <div className="chart-plot"><Bar data={data} options={options} /></div>
     </div>
   );
 }

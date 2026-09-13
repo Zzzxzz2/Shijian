@@ -1,5 +1,6 @@
 """Create deterministic users for the extended E2E regression."""
 import asyncio
+import os
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,6 +19,10 @@ USERS = [
 ]
 
 async def main():
+    if os.getenv("ENV", "development").lower() == "production":
+        raise RuntimeError("E2E bootstrap is disabled in production")
+    if not os.getenv("DATABASE_URL"):
+        raise RuntimeError("Set DATABASE_URL explicitly to an isolated E2E database")
     async with AsyncSession(engine) as s:
         for uname, pwd, role in USERS:
             user = (await s.execute(select(User).where(User.username == uname))).scalar_one_or_none()
@@ -29,4 +34,5 @@ async def main():
         await s.commit()
         print("Users created:", [u[0] for u in USERS])
 
-asyncio.run(main())
+if __name__ == "__main__":
+    asyncio.run(main())

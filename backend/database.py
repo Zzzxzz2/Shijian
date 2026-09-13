@@ -101,6 +101,9 @@ async def init_db() -> None:
                 "PRAGMA table_info(projects)"
             )
             cols = {row[1] for row in result.fetchall()}
+            if "schema_endpoints" not in cols:
+                await conn.exec_driver_sql("ALTER TABLE projects ADD COLUMN schema_endpoints TEXT DEFAULT '[]'")
+                await conn.commit()
             if "auth_config" not in cols:
                 await conn.exec_driver_sql(
                     "ALTER TABLE projects ADD COLUMN auth_config TEXT DEFAULT '{}'"
@@ -129,6 +132,13 @@ async def init_db() -> None:
                     "ALTER TABLE test_runs ADD COLUMN source VARCHAR(20) DEFAULT ''"
                 )
                 await conn.commit()
+
+    if "sqlite" in DATABASE_URL:
+        async with engine.begin() as conn:
+            cols = {row[1] for row in (await conn.exec_driver_sql("PRAGMA table_info(test_runs)")).fetchall()}
+            for name, declaration in {"timeout_seconds": "INTEGER NOT NULL DEFAULT 300", "termination_reason": "TEXT", "snapshot_encrypted": "TEXT"}.items():
+                if name not in cols:
+                    await conn.exec_driver_sql(f"ALTER TABLE test_runs ADD COLUMN {name} {declaration}")
 
     # Migration: add skip_auth column to test_cases if missing
     if "sqlite" in DATABASE_URL:

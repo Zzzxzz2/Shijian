@@ -53,7 +53,9 @@
     // Will trigger hashchange
   };
 
+  var routeVersion = 0;
   function handleRoute() {
+    var version = ++routeVersion;
     var rawHash = window.location.hash.replace(/^#/, '') || '/login';
     if (rawHash === '/' || rawHash === '') rawHash = '/login';
 
@@ -97,12 +99,13 @@
 
     // Fetch page content
     window.App.utils.showLoading();
-    fetch(route.page)
+    fetch(route.page, {cache: 'no-store'})
       .then(function (resp) {
         if (!resp.ok) throw new Error('Page not found');
         return resp.text();
       })
       .then(function (html) {
+        if (version !== routeVersion) return;
         document.getElementById('app').innerHTML = html;
         document.title = route.title + ' - 试剑 V3';
 
@@ -125,6 +128,7 @@
         }
       })
       .catch(function (err) {
+        if (version !== routeVersion) return;
         console.error('Router catch:', err && err.message ? err.message : err);
         if (err && err.stack) console.error('Router stack:', err.stack);
         document.getElementById('app').innerHTML = '<div class="text-center py-20 text-gray-400">\u9875\u9762\u52a0\u8f7d\u5931\u8d25</div>';

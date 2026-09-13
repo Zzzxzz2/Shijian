@@ -1,0 +1,28 @@
+/* Shared interaction and layout fixes for the existing SPA. */
+body { font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif; line-height: 1.6; }
+:focus-visible { outline: 2px solid #2563eb; outline-offset: 3px; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.fixed.inset-0.items-center:not(.hidden) { display: flex; padding: 20px; overflow-y: auto; }
+.fixed.inset-0 > .bg-white { max-height: calc(100dvh - 40px); overflow-y: auto; }
+#nav > div { height: auto; min-height: 56px; flex-wrap: wrap; gap: 12px; padding-top: 10px; padding-bottom: 10px; }
+#nav > div > div { flex-wrap: wrap; }
+#app table { font-variant-numeric: tabular-nums; }
+#app th { white-space: nowrap; }
+#diff-section td:not(:first-child) { white-space: nowrap; }
+#app td { overflow-wrap: anywhere; }
+#app pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+#app .tab-btn { white-space: nowrap; }
+.workflow-guide { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 16px; margin-bottom: 24px; padding: 20px; border: 1px solid #dbe4f0; border-left: 3px solid #2563eb; background: #fff; }
+.workflow-guide strong { display: block; color: #0f172a; margin-bottom: 4px; }
+.workflow-guide p { font-size: 13px; color: #64748b; margin: 0; }
+@media (max-width: 640px) {
+  .workflow-guide { grid-template-columns: 1fr; }
+  #app .flex { flex-wrap: wrap; }
+  #app .fixed { padding: 12px; }
+  #toast-container { left: 12px; right: 12px; }
+}
+
+#run-snapshot { max-height: 360px; overflow: auto; }
+
+.workflow-step summary::before { content: "▸"; color: #64748b; }
+.workflow-step[open] summary::before { content: "▾"; }

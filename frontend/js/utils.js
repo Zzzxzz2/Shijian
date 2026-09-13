@@ -4,12 +4,16 @@
 
   var utils = {};
 
+  var loadingCount = 0;
   utils.showLoading = function () {
+    loadingCount++;
     var el = document.getElementById('loading-overlay');
     if (el) el.classList.remove('hidden');
   };
 
   utils.hideLoading = function () {
+    loadingCount = Math.max(0, loadingCount - 1);
+    if (loadingCount) return;
     var el = document.getElementById('loading-overlay');
     if (el) el.classList.add('hidden');
   };
@@ -32,6 +36,8 @@
     if (!container) {
       container = document.createElement('div');
       container.id = 'toast-container';
+      container.setAttribute('role', 'status');
+      container.setAttribute('aria-live', 'polite');
       container.className = 'fixed top-4 right-4 z-[60] flex flex-col gap-2';
       document.body.appendChild(container);
     }
@@ -44,16 +50,16 @@
   };
 
   utils.escapeHtml = function (str) {
-    if (!str) return '';
+    if (str === null || str === undefined) return '';
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(str));
-    return div.innerHTML;
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   };
 
   utils.formatDate = function (dateStr) {
     if (!dateStr) return '-';
     try {
-      var d = new Date(dateStr);
+      var d = new Date(/T/.test(dateStr) && !/(Z|[+-]\d{2}:\d{2})$/i.test(dateStr) ? dateStr + 'Z' : dateStr);
       if (isNaN(d.getTime())) return dateStr;
       var pad = function (n) { return n < 10 ? '0' + n : '' + n; };
       return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())

@@ -38,3 +38,15 @@ e2e-results.json
 .DS_Store
 Thumbs.db
 *.local
+
+# Local portfolio handoff and backups (publish selected, reviewed assets separately)
+/resume_project_pack/
+/backups/
+
+# Credentials and raw browser traffic
+*.pem
+*.key
+*.p12
+*.pfx
+*.har
+*trace*.zip

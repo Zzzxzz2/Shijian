@@ -49,7 +49,7 @@ def serve_frontend():
 SECRET_KEY = "shijian-v3-target-secret-key-2026"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 120
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "target.db")
+DB_PATH = os.getenv("TARGET_DATABASE_PATH") or os.path.join(os.path.dirname(os.path.abspath(__file__)), "target.db")
 
 # ---------------------------------------------------------------------------
 # Database
@@ -409,17 +409,21 @@ def update_task_status(
     body: TaskStatusUpdate,
     authorization: Optional[str] = Header(None, alias="Authorization", include_in_schema=False),
 ):
-    _get_current_user(authorization)
+    user, _ = _get_current_user(authorization)
     conn = get_db()
     task = conn.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
     if not task:
         conn.close()
         raise HTTPException(404, "Task not found")
 
+    if task["user_id"] != user["id"] and user["role"] != "admin":
+        conn.close()
+        raise HTTPException(403, "Not authorized to update this task")
+
     flow = {"todo": "doing", "doing": "done", "done": "archived"}
     if body.status != flow.get(task["status"]) and body.status != "archived":
         conn.close()
-        raise HTTPException(400, f"Invalid status transition: {task['status']} -> {body['status']}")
+        raise HTTPException(400, f"Invalid status transition: {task['status']} -> {body.status}")
 
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     conn.execute(

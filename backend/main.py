@@ -43,10 +43,16 @@ CORS_ALLOW_ORIGINS = _cors_origins()
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    if os.getenv("ENV", "development").lower() == "production":
+        from services.crypto import _get_key
+        _get_key()  # Validate before opening or migrating the production database.
     await init_db()
+    from services.executor import recover_interrupted_runs, shutdown_runs
+    await recover_interrupted_runs()
     await init_scheduler(DATABASE_URL)
     yield
     await shutdown_scheduler()
+    await shutdown_runs()
     await registry.shutdown_all()
     await _shutdown_recorders()  # safety net: drain orphan recorders
     await engine.dispose()

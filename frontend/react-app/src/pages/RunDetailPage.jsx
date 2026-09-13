@@ -1,3 +1,4 @@
+import { apiDate } from '../lib/date';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../lib/api';
@@ -54,7 +55,7 @@ export default function RunDetailPage() {
   const totalPass = summary?.pass ?? results.filter((r) => r.status === 'pass').length;
   const totalFail = summary?.fail ?? results.filter((r) => r.status === 'fail').length;
   const totalError = summary?.error ?? results.filter((r) => r.status === 'error').length;
-  const total = totalPass + totalFail + totalError;
+  const total = summary?.total ?? (totalPass + totalFail + totalError);
 
   // Map case_id → case name
   const caseMap = {};
@@ -72,7 +73,7 @@ export default function RunDetailPage() {
 
   const runDuration =
     run?.started_at && run?.finished_at
-      ? (new Date(run.finished_at) - new Date(run.started_at))
+      ? (apiDate(run.finished_at) - apiDate(run.started_at))
       : null;
 
   // ── Loading ──
@@ -116,7 +117,8 @@ export default function RunDetailPage() {
   const statusBadge = (() => {
     const s = run?.status;
     if (s === 'running') return { label: '运行中', cls: 'bg-blue-500/20 text-blue-400 border-blue-500/30' };
-    if (s === 'queued') return { label: '排队中', cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
+    if (['cancelled', 'timeout', 'interrupted'].includes(s)) return { label: {cancelled:'已取消', timeout:'执行超时', interrupted:'执行中断'}[s], cls: 'bg-gray-500/20 text-gray-400 border-gray-500/30' };
+    if (s === 'queued' || s === 'pending') return { label: '排队中', cls: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' };
     if (run?.result === 'pass') return { label: '通过', cls: 'bg-green-500/20 text-green-400 border-green-500/30' };
     if (run?.result === 'fail') return { label: '失败', cls: 'bg-red-500/20 text-red-400 border-red-500/30' };
     return { label: s || '未知', cls: 'bg-gray-500/20 text-gray-400 border-gray-500/30' };
@@ -142,7 +144,7 @@ export default function RunDetailPage() {
             <p className="text-sm text-gray-500 mt-0.5">
               #{runId}
               {run?.created_at && (
-                <span className="ml-2">· {new Date(run.created_at).toLocaleString('zh-CN')}</span>
+                <span className="ml-2">· {apiDate(run.created_at).toLocaleString('zh-CN')}</span>
               )}
               {runDuration != null && (
                 <span className="ml-2">· 耗时 {fmtDuration(runDuration)}</span>
@@ -155,6 +157,12 @@ export default function RunDetailPage() {
         </div>
       </div>
 
+      <p className="text-sm text-gray-400 mb-3">总时限：{run?.timeout_seconds || 300} 秒 · 未完成：{summary?.skipped || 0}。{run?.termination_reason || ''}</p>
+      <details className="border border-border rounded-lg p-3 mb-4">
+        <summary className="cursor-pointer">执行输入快照</summary>
+        <p className="text-sm text-gray-400 my-2">{run?.snapshot ? '执行创建时冻结；常见凭据已隐藏。' : '此历史记录没有保存快照。'}</p>
+        {run?.snapshot && <pre aria-label="执行输入快照内容" className="text-xs whitespace-pre-wrap break-all max-h-96 overflow-auto">{JSON.stringify(run.snapshot, null, 2)}</pre>}
+      </details>
       {/* ── Summary stat cards ── */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <div className="bg-surface-raised border border-border rounded-xl p-3 text-center">

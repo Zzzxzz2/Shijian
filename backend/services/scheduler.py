@@ -1,5 +1,7 @@
 """APScheduler 调度服务 — AsyncIOScheduler + persistent SQLAlchemy job store。"""
 
+from services.run_history import capture_snapshot
+
 import logging
 from datetime import datetime, timezone
 
@@ -107,6 +109,7 @@ async def _execute_schedule(schedule_id: int) -> None:
         await db.flush()
         for cid in case_rows:
             db.add(TestRunCases(run_id=run.id, case_id=cid))
+        await capture_snapshot(db, run)
         await db.commit()
 
         now = datetime.now(timezone.utc)

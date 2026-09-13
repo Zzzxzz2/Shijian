@@ -1,3 +1,4 @@
+import { apiDate } from '../lib/date';
 import { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import api from '../lib/api';
@@ -74,7 +75,7 @@ export default function CoveragePage() {
     if (typeof s === 'string') {
       try { s = JSON.parse(s); } catch { s = null; }
     }
-    const total = (s?.pass || 0) + (s?.fail || 0);
+    const total = s?.total ?? ((s?.pass || 0) + (s?.fail || 0) + (s?.error || 0) + (s?.skipped || 0));
     if (total > 0) passRate = Math.round(((s?.pass || 0) / total) * 100);
   }
 
@@ -112,6 +113,7 @@ export default function CoveragePage() {
   // ── Render ──
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 animate-fade-in">
+      <p className="text-sm text-gray-400 mb-3">端点覆盖表示已有保存用例，不代表执行通过率或代码覆盖率。通过率以计划用例总数为分母，包含未完成用例。</p>
       {/* ── Header ── */}
       <div className="mb-6">
         <a
@@ -168,7 +170,7 @@ export default function CoveragePage() {
             <StatCard
               title="末次通过率"
               value={passRate != null ? `${passRate}%` : '-'}
-              subtitle={lastRun ? new Date(lastRun.created_at).toLocaleDateString('zh-CN') : ''}
+              subtitle={lastRun ? apiDate(lastRun.created_at).toLocaleDateString('zh-CN') : ''}
               color={passRate != null && passRate >= 80 ? 'green' : 'orange'}
             />
           </>
@@ -179,7 +181,7 @@ export default function CoveragePage() {
             <StatCard
               title="末次通过率"
               value={passRate != null ? `${passRate}%` : '-'}
-              subtitle={lastRun ? new Date(lastRun.created_at).toLocaleDateString('zh-CN') : ''}
+              subtitle={lastRun ? apiDate(lastRun.created_at).toLocaleDateString('zh-CN') : ''}
               color={passRate != null && passRate >= 80 ? 'green' : 'orange'}
             />
           </>

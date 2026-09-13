@@ -225,7 +225,8 @@ def _generate_assertions(method: str, detail: dict) -> list[dict]:
                     continue
 
     if target_status is None:
-        target_status = 200
+        documented = sorted(int(code) for code in responses if str(code).isdigit() and 100 <= int(code) <= 599)
+        target_status = documented[0] if documented else 200
 
     assertions.append({
         "type": "status_code",
@@ -692,10 +693,10 @@ async def parse_openapi_schema(
     """Parse an OpenAPI spec and return a list of test-case stubs.
 
     Accepts either a raw JSON string (``spec``) or a downloadable URL
-    (``spec_url``).  The spec is never stored — only parsed in memory.
+    (``spec_url``).  Only the endpoint catalog is stored; raw spec and authentication headers are not persisted.
     """
     # ── Project guard ─────────────────────────────────────────────────
-    await require_project_access(pid, current_user, db, "editor")
+    project = await require_project_access(pid, current_user, db, "editor")
 
     # ── Source resolution ─────────────────────────────────────────────
     spec_str: str | None = None
@@ -836,6 +837,8 @@ async def parse_openapi_schema(
     spec_title = (info.get("title", "") or "")[:255]
     spec_version = (info.get("version", "") or "")[:50]
 
+    project.schema_endpoints = raw_endpoints
+    await db.commit()
     return SchemaParseResponse(
         title=spec_title,
         endpoints=raw_endpoints,
@@ -844,7 +847,7 @@ async def parse_openapi_schema(
         spec_version=spec_version,
         coverage_summary={
             "total": len(raw_endpoints),
-            "covered": len(stubs),
-            "uncovered": len(raw_endpoints) - len(stubs),
+            "covered": len({stub.coverage_key for stub in stubs}),
+            "uncovered": len(raw_endpoints) - len({stub.coverage_key for stub in stubs}),
         },
     )

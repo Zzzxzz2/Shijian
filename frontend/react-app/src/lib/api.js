@@ -35,7 +35,7 @@ function request(method, path, data, opts = {}) {
       if (resp.status === 401) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
-        window.location.hash = '#/login';
+        if (!opts.skipAuthRedirect) window.location.hash = '#/login';
         return Promise.reject({ status: 401, detail: '未登录或登录已过期' });
       }
       if (resp.status === 204) return null;

@@ -16,6 +16,11 @@
     }
     state.currentPage = 1;
     bindEvents();
+    if (window.App.auth.isGuest()) {
+      document.getElementById('search-input').disabled = true;
+      document.getElementById('project-list').innerHTML = '<tr><td colspan="4" class="text-center py-12">访客可了解测试流程；项目数据仅向项目成员开放。<br>请点击右上角登录，注册后创建自己的测试项目。</td></tr>';
+      return;
+    }
     loadProjects();
   }
 
@@ -39,6 +44,7 @@
       if (npName) { npName.value = ''; npName.focus(); }
       var npDesc = document.getElementById('np-desc');
       if (npDesc) npDesc.value = '';
+      document.getElementById('np-url').value = '';
     });
 
     var npCancel = document.getElementById('np-cancel');
@@ -55,6 +61,12 @@
         window.App.utils.showToast('请输入项目名称', 'error');
         return;
       }
+      if (npConfirm.disabled) return;
+      if (url && !/^https?:\/\//i.test(url)) {
+        window.App.utils.showToast('被测系统地址必须以 http:// 或 https:// 开头', 'error');
+        return;
+      }
+      npConfirm.disabled = true;
       window.App.api.post('/api/projects', { name: name, description: desc || undefined, url: url || undefined })
         .then(function () {
           window.App.utils.showToast('项目创建成功', 'success');
@@ -64,7 +76,7 @@
         })
         .catch(function (err) {
           window.App.utils.showToast(err.detail || '创建失败', 'error');
-        });
+        }).finally(function () { npConfirm.disabled = false; });
     });
 
     // Close modal on backdrop click
@@ -110,7 +122,7 @@
         + '<td class="px-4 py-3 font-medium text-gray-800">' + window.App.utils.escapeHtml(p.name) + '</td>'
         + '<td class="px-4 py-3 text-gray-500 hidden md:table-cell">' + window.App.utils.escapeHtml(p.description || '-') + '</td>'
         + '<td class="px-4 py-3 text-center text-gray-500">' + (p.case_count || 0) + '</td>'
-        + '<td class="px-4 py-3 text-center"><span class="inline-block w-2 h-2 rounded-full bg-green-400"></span></td>'
+        + '<td class="px-4 py-3 text-center">' + window.App.utils.escapeHtml(p.latest_run ? ({pending: '排队中', cancelled: '已取消', timeout: '执行超时', interrupted: '执行中断', queued: '排队中', running: '执行中', done: p.latest_run.result === 'pass' ? '通过' : '未通过', failed: '执行异常'}[p.latest_run.status] || p.latest_run.status) : '尚未执行') + '</td>'
         + '</tr>';
     }
     tbody.innerHTML = html;
@@ -129,7 +141,7 @@
       pagiHtml += '<button class="px-3 py-1 text-sm border rounded hover:bg-gray-100" data-page="' + (state.currentPage - 1) + '">上一页</button>';
     }
     pagiHtml += '<span class="px-3 py-1 text-sm text-gray-500">第 ' + state.currentPage + ' 页</span>';
-    if (projects.length >= state.pageSize) {
+    if (state.currentPage < totalPages) {
       pagiHtml += '<button class="px-3 py-1 text-sm border rounded hover:bg-gray-100" data-page="' + (state.currentPage + 1) + '">下一页</button>';
     }
     var pagiEl = document.getElementById('pagination');

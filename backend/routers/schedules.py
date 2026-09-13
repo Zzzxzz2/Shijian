@@ -1,5 +1,7 @@
 """定时执行 CRUD + 手动触发。由 services/scheduler.py (APScheduler) 驱动。"""
 
+from services.run_history import capture_snapshot
+
 import logging
 from datetime import datetime, timezone
 
@@ -235,6 +237,7 @@ async def trigger_schedule(
     await db.flush()
     for cid in case_rows:
         db.add(TestRunCases(run_id=run.id, case_id=cid))
+    await capture_snapshot(db, run)
     await db.commit()
 
     create_task(execute_run(run.id), task_id=f"run-{run.id}")

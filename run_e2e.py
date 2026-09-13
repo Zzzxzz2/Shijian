@@ -81,7 +81,7 @@ def main():
       {"name":"Login","method":"POST","url":TARGET+"/api/login","body":{"username":"demo","password":"123456"},"headers":{"Content-Type":"application/json"},"assertions":[{"type":"status_code","operator":"eq","expected":200}],"capture":[{"variable":"token","json_path":"access_token"}]},
       {"name":"CreateTask","method":"POST","url":TARGET+"/api/tasks","body":{"title":"E2E task","description":"created by workflow","priority":"medium"},"headers":{"Content-Type":"application/json","Authorization":"Bearer {{token}}"},"assertions":[{"type":"status_code","operator":"eq","expected":201}],"capture":[{"variable":"task_id","json_path":"id"}]},
       {"name":"GetTask","method":"GET","url":TARGET+"/api/tasks/{{task_id}}","headers":{"Authorization":"Bearer {{token}}"},"assertions":[{"type":"status_code","operator":"eq","expected":200}]},
-      {"name":"DeleteTask","method":"DELETE","url":TARGET+"/api/tasks/{{task_id}}","headers":{"Authorization":"Bearer {{token}}"},"assertions":[{"type":"status_code","operator":"eq","expected":204}]}]}
+      {"name":"RejectUnauthorizedDelete","method":"DELETE","url":TARGET+"/api/tasks/{{task_id}}","headers":{"Authorization":"Bearer {{token}}"},"assertions":[{"type":"status_code","operator":"eq","expected":403}]}]}
     wcid=case("靶场任务全流程",wf)
     schema={"type":"object","properties":{"items":{"type":"array"},"total":{"type":"integer"},"page":{"type":"integer"},"limit":{"type":"integer"}},"required":["items","total","page","limit"]}
     ccid=case("Contract 验证任务列表结构",{"method":"GET","url":"/api/tasks","assertions":api["assertions"]+[{"type":"schema_match","target":schema,"operator":"eq","expected":True}]})
@@ -92,7 +92,7 @@ def main():
 
     # execution and high-value generated features
     r1,res=run(pid,cid,tk); api_result=(res.get("results") or [{}])[0]; detail=api_result.get("detail",{}); check("API result fields",200 if res.get("status")=="done" and "failure_category" in api_result and all(k in detail for k in ("status_code","response_body","duration_ms")) else 0,200)
-    _,res=run(pid,wcid,tk); steps=(res.get("results") or [{}])[0].get("detail",{}).get("steps",[]); check("workflow four steps",len(steps),4)
+    _,res=run(pid,wcid,tk); steps=(res.get("results") or [{}])[0].get("detail",{}).get("steps",[]); check("workflow four steps",len(steps),4); check("workflow all assertions pass", all(step.get("status") == "pass" for step in steps) and len(steps) == 4, True)
     _,res=run(pid,ccid,tk); assertions=(res.get("results") or [{}])[0].get("detail",{}).get("assertions",[]); check("contract completed",200 if len(assertions)>1 and assertions[1].get("actual") is True else 0,200)
     s,_,_=call("PATCH",f"/api/projects/{pid}/cases/{ecid}",{"content":{"method":"GET","url":TARGET+"/api/error/400","assertions":[{"type":"status_code","target":"status_code","operator":"eq","expected":400}]}},tk); check("target case patch",s,200)
     run(pid,ecid,tk); run(pid,cid,tk)
@@ -127,4 +127,5 @@ def main():
     Path("e2e-results.json").write_text(json.dumps(out,ensure_ascii=False,indent=2),encoding="utf-8")
     passed=sum(ok for _,ok,_ in out); print(f"E2E: {passed}/{len(out)} passed")
     for n,ok,d in out: print(("PASS" if ok else "FAIL"),n,d)
-if __name__ == "__main__": main()
+    return int(passed != len(out))
+if __name__ == "__main__": raise SystemExit(main())

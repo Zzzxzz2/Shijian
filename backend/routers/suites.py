@@ -1,5 +1,7 @@
 """测试集管理：CRUD + 一键执行。"""
 
+from services.run_history import capture_snapshot
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -256,6 +258,7 @@ async def run_suite(
     # ⚠️ 顺序：必须先 commit，再 spawn
     # execute_run 在新 Session 中查询 run/test_run_cases，
     # 不 commit 的话那侧读不到数据
+    await capture_snapshot(db, run)
     await db.commit()
     create_task(execute_run(run.id), task_id=f"run-{run.id}")
 

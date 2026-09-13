@@ -193,9 +193,12 @@ class TestCaseBatchCreate(BaseModel):
 
 class TestRunCreate(BaseModel):
     case_ids: list[int]
+    timeout_seconds: int = Field(default=300, ge=1, le=3600)
 
 
 class TestRunResponse(BaseModel):
+    timeout_seconds: int = 300
+    termination_reason: Optional[str] = None
     id: int
     project_id: int
     status: str
@@ -209,6 +212,7 @@ class TestRunResponse(BaseModel):
 
 
 class TestRunDetailResponse(TestRunResponse):
+    snapshot: Optional[dict[str, Any]] = None
     cases: list[TestCaseResponse] = []
 
 
@@ -448,6 +452,7 @@ class ScheduleResponse(BaseModel):
 
 class RunByTag(BaseModel):
     tag: str
+    timeout_seconds: int = Field(default=300, ge=1, le=3600)
 
 
 class DiffItem(BaseModel):

@@ -36,6 +36,8 @@ def _get_key() -> bytes:
         raise RuntimeError("API_KEY_ENCRYPTION_KEY must be hexadecimal") from exc
     if len(key) != 32:
         raise RuntimeError("API_KEY_ENCRYPTION_KEY must contain exactly 32 bytes")
+    if os.getenv("ENV", "development").lower() == "production" and key == bytes(32):
+        raise RuntimeError("API_KEY_ENCRYPTION_KEY cannot use the development key in production")
     return key
 
 

@@ -2,6 +2,8 @@
 (function () {
   'use strict';
 
+  function isActive(status) { return ['queued', 'pending', 'running'].indexOf(status) >= 0; }
+
   var page = {
     runId: null,
     projectId: null,
@@ -12,6 +14,11 @@
   };
 
   page.init = function (params) {
+    page.closeWebSocket();
+    page._diffLoaded = false;
+    page.results = [];
+    page.cases = [];
+    page.runData = null;
     page.runId = params.id;
     page.projectId = null;
     page.pollTimer = null;
@@ -21,6 +28,24 @@
     page.isDone = false;
     page.loadRun();
 
+    document.getElementById('result-filter').addEventListener('change', page.renderResults);
+    document.getElementById('retry-failed-btn').addEventListener('click', function () {
+      var btn = this;
+      if (btn.disabled || !page.projectId) return;
+      btn.disabled = true;
+      window.App.api.post('/api/projects/' + page.projectId + '/runs/' + page.runId + '/retry-failed', {})
+        .then(function (run) { window.App.router.navigate('/runs/' + run.id); })
+        .catch(function () {})
+        .finally(function () { btn.disabled = false; });
+    });
+    document.getElementById('cancel-run-btn').onclick = function () {
+      var btn = this;
+      if (btn.disabled || !page.projectId) return;
+      btn.disabled = true;
+      window.App.api.post('/api/projects/' + page.projectId + '/runs/' + page.runId + '/cancel', {})
+        .then(function () { page.loadRun(); })
+        .catch(function () {}).finally(function () { btn.disabled = false; });
+    };
     // Report button
     var reportBtn = document.getElementById('report-btn');
     if (reportBtn) {
@@ -53,9 +78,11 @@
   };
 
   page.loadRun = function () {
+    var runId = page.runId;
     // Use the standalone run endpoint (no project_id needed)
     window.App.api.get('/api/runs/' + page.runId)
       .then(function (data) {
+        if (page.runId !== runId || window.location.hash !== '#/runs/' + runId) return;
         page.projectId = data.project_id;
         page.runData = data;
         page.cases = data.cases || [];
@@ -64,15 +91,17 @@
         // Update back link
         document.getElementById('back-link').setAttribute('href', '#/projects/' + page.projectId);
         // Try to get project name from the run's project_id
-        window.App.api.get('/api/projects/' + page.projectId, { showLoading: false })
+        if (data.snapshot) { document.querySelector('#project-name span').textContent = data.snapshot.project.name; }
+        else window.App.api.get('/api/projects/' + page.projectId, { showLoading: false })
           .then(function (proj) {
             var el = document.querySelector('#project-name span');
             if (el) el.textContent = proj.name || '';
           })
           .catch(function () { /* ignore */ });
         // Start WebSocket or polling
-        if (data.status === 'queued' || data.status === 'running') {
+        if (isActive(data.status)) {
           page.connectWebSocket();
+          page.startPolling();
         } else {
           page.isDone = true;
         }
@@ -86,11 +115,13 @@
 
   page.loadResults = function () {
     if (!page.projectId) return;
-    window.App.api.get('/api/runs/' + page.runId + '/results')
+    var runId = page.runId;
+    window.App.api.get('/api/runs/' + page.runId + '/results', {showLoading: false})
       .then(function (data) {
+        if (page.runId !== runId || window.location.hash !== '#/runs/' + runId) return;
         page.results = Array.isArray(data) ? data : (data.items || []);
         page.renderResults();
-      });
+      }).catch(function () {});
     // Load diff when run is done
     if (page.runData && page.runData.status === 'done') {
       page.loadDiff();
@@ -101,9 +132,14 @@
     var run = page.runData;
     if (!run) return;
 
+    if (!document.getElementById('status-badge')) return;
     // Status badge
     var badge = document.getElementById('status-badge');
     var statusMap = {
+      'pending': { text: '排队中', cls: 'bg-yellow-100 text-yellow-700' },
+      'cancelled': { text: '已取消', cls: 'bg-gray-100 text-gray-700' },
+      'timeout': { text: '执行超时', cls: 'bg-red-100 text-red-700' },
+      'interrupted': { text: '执行中断', cls: 'bg-red-100 text-red-700' },
       'queued': { text: '\u6392\u961f\u4e2d', cls: 'bg-yellow-100 text-yellow-700' },
       'running': { text: '\u6267\u884c\u4e2d', cls: 'bg-blue-100 text-blue-700' },
       'done': { text: '\u5df2\u5b8c\u6210', cls: 'bg-green-100 text-green-700' },
@@ -116,9 +152,15 @@
     // Show report button only when run is done
     var reportBtn = document.getElementById('report-btn');
     if (reportBtn) {
-      reportBtn.classList.toggle('hidden', run.status !== 'done');
+      reportBtn.classList.toggle('hidden', isActive(run.status));
     }
 
+    document.getElementById('cancel-run-btn').classList.toggle('hidden', !isActive(run.status));
+    var summaryInfo = {};
+    try { summaryInfo = JSON.parse(run.summary || '{}'); } catch (e) {}
+    document.getElementById('run-lifecycle').textContent = '执行总时限：' + (run.timeout_seconds || 300) + ' 秒 · 未完成：' + (summaryInfo.skipped || 0) + '。' + (run.termination_reason || '');
+    document.getElementById('snapshot-note').textContent = run.snapshot ? '创建执行时冻结的测试条件；常见凭据已隐藏。重跑使用当前用例生成新的快照。' : '此历史记录未保存执行快照，下面的用例信息可能已发生变化。';
+    document.getElementById('run-snapshot').textContent = run.snapshot ? JSON.stringify(run.snapshot, null, 2) : '';
     // Summary from run.summary
     try {
       var summary = JSON.parse(run.summary || '{}');
@@ -148,12 +190,14 @@
 
   page.loadDiff = function () {
     if (page._diffLoaded) return;
+    var runId = page.runId;
     page._diffLoaded = true;
     window.App.api.get('/api/runs/' + page.runId + '/diff')
       .then(function (data) {
+        if (page.runId !== runId || window.location.hash !== '#/runs/' + runId) return;
         page.renderDiff(data);
       })
-      .catch(function () { /* no previous run or error */ });
+      .catch(function () { page._diffLoaded = false; });
   };
 
   page.renderDiff = function (data) {
@@ -165,7 +209,7 @@
     // Summary
     var summary = data.summary || {};
     var summaryEl = document.getElementById('diff-summary');
-    summaryEl.innerHTML = '';
+    summaryEl.innerHTML = data.previous_run ? '<span class="text-sm text-gray-500">基线：执行 #' + data.previous_run.id + '</span>' : '<span class="text-sm text-gray-500">首次执行，暂无历史基线</span>';
     if (summary.new_failures > 0) summaryEl.innerHTML += '<span class="px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-700">' + summary.new_failures + ' \u4e2a\u65b0\u589e\u5931\u8d25</span>';
     if (summary.new_passes > 0) summaryEl.innerHTML += '<span class="px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-700">' + summary.new_passes + ' \u4e2a\u65b0\u901a\u8fc7</span>';
     summaryEl.innerHTML += '<span class="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-700">' + summary.unchanged + ' \u4e2a\u672a\u53d8\u5316</span>';
@@ -181,6 +225,7 @@
       if (d.status === 'new_failure') changeBadge = '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">\u65b0\u589e\u5931\u8d25</span>';
       else if (d.status === 'new_pass') changeBadge = '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">\u65b0\u901a\u8fc7</span>';
       else if (d.status === 'new_case') changeBadge = '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">\u65b0\u7528\u4f8b</span>';
+      else if (d.status === 'changed') changeBadge = '<span class="text-yellow-700">状态变化</span>';
       else changeBadge = '<span class="inline-block px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">\u672a\u53d8\u5316</span>';
       html += '<tr class="border-b border-gray-50">'
         + '<td class="px-4 py-3 font-medium text-gray-800">' + window.App.utils.escapeHtml(d.case_name) + '</td>'
@@ -194,6 +239,11 @@
 
   page.renderResults = function () {
     var container = document.getElementById('case-results');
+    if (!container) return;
+    var failed = page.results.filter(function (r) { return r.status === 'fail' || r.status === 'error'; });
+    var retry = document.getElementById('retry-failed-btn');
+    retry.classList.toggle('hidden', !failed.length || !page.runData || isActive(page.runData.status));
+    var filter = document.getElementById('result-filter').value;
     if (page.results.length === 0) {
       container.innerHTML = '<p class="text-center py-8 text-gray-400">\u6682\u65e0\u7ed3\u679c</p>';
       return;
@@ -209,7 +259,9 @@
 
     for (var i = 0; i < page.results.length; i++) {
       var r = page.results[i];
-      var caseName = '\u7528\u4f8b #' + r.case_id;
+      if (filter === 'failed' && r.status !== 'fail' && r.status !== 'error') continue;
+      if (filter === 'pass' && r.status !== 'pass') continue;
+      var caseName = r.name || r.case_name || '\u7528\u4f8b #' + r.case_id;
       // Try to find case name from cases list
       for (var j = 0; j < page.cases.length; j++) {
         if (page.cases[j].id === r.case_id) {
@@ -230,6 +282,10 @@
       var header = document.createElement('div');
       header.className = 'flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors';
       header.setAttribute('data-idx', i);
+      header.setAttribute('role', 'button');
+      header.tabIndex = 0;
+      header.setAttribute('aria-expanded', 'false');
+      header.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); this.click(); } });
       header.innerHTML = '<div class="flex items-center gap-2">'
         + '<span class="inline-block w-2 h-2 rounded-full ' + statusDot + '"></span>'
         + '<span class="text-sm font-medium text-gray-800">' + window.App.utils.escapeHtml(caseName) + '</span>'
@@ -241,6 +297,7 @@
 
       header.addEventListener('click', function () {
         var detail = this.nextElementSibling;
+        this.setAttribute('aria-expanded', this.getAttribute('aria-expanded') !== 'true');
         var icon = this.querySelector('.expand-icon');
         if (detail.classList.contains('hidden')) {
           detail.classList.remove('hidden');
@@ -263,6 +320,7 @@
 
     container.innerHTML = '';
     container.appendChild(fragment);
+    if (!container.children.length) container.textContent = '没有符合筛选条件的结果';
   };
 
   page.renderResultDetail = function (r) {
@@ -276,23 +334,26 @@
         + '<p class="font-semibold text-gray-600 mb-2">\u64cd\u4f5c\u6b65\u9aa4</p>';
       for (var si = 0; si < d.steps.length; si++) {
         var step = d.steps[si];
-        var stepStatus = step.status === 'pass' ? 'text-green-500' : step.status === 'error' ? 'text-red-500' : 'text-yellow-500';
-        var stepIcon = step.status === 'pass' ? '\u2713' : step.status === 'error' ? '\u2717' : '?';
-        html += '<div class="mb-2 p-2 bg-white rounded border border-gray-200">'
-          + '<div class="flex items-center gap-2 mb-1">'
+        var stepStatus = step.status === 'pass' ? 'text-green-500' : 'text-red-500';
+        var stepIcon = step.status === 'pass' ? '\u2713' : '\u2717';
+        html += '<details class="workflow-step mb-2 p-3 bg-white rounded border border-gray-200">'
+          + '<summary class="flex items-center gap-2 cursor-pointer">'
           + '<span class="' + stepStatus + ' font-bold">' + stepIcon + '</span>'
-          + '<span class="font-medium text-gray-700">' + window.App.utils.escapeHtml(step.action || '') + '</span>';
+          + '<span class="font-medium text-gray-700">' + window.App.utils.escapeHtml(step.name || step.action || '') + '</span>';
         if (step.target) html += ' <span class="text-gray-500">' + window.App.utils.escapeHtml(step.target) + '</span>';
         if (step.value) html += ' <span class="text-gray-400">\u2192 ' + window.App.utils.escapeHtml(step.value) + '</span>';
         html += '<span class="ml-auto text-xs text-gray-400">' + (step.duration_ms ? (step.duration_ms / 1000).toFixed(2) + 's' : '') + '</span>'
-          + '</div>';
+          + '</summary><div class="mt-3">';
         if (step.error) {
           html += '<p class="text-red-500 text-xs mt-1">' + window.App.utils.escapeHtml(step.error) + '</p>';
+        }
+        if (step.name || step.detail) {
+          html += page.renderResultDetail({detail: Object.assign({}, step.detail || {}, {assertions: step.assertions || [], error: step.error}), case_id: r.case_id});
         }
         if (step.screenshot) {
           html += '<div class="mt-2"><img src="/api/screenshots/' + page.runId + '/' + r.case_id + '/' + encodeURIComponent(step.screenshot.split(/[/\\]/).pop()) + '?token=' + assetToken + '" class="max-w-full h-auto rounded border border-gray-200" style="max-height:200px" /></div>';
         }
-        html += '</div>';
+        html += '</div></details>';
       }
       html += '</div>';
 
@@ -325,7 +386,7 @@
 
       if (d.response_body !== undefined && d.response_body !== null) {
         var bodyStr = typeof d.response_body === 'object' ? JSON.stringify(d.response_body, null, 2) : String(d.response_body);
-        if (bodyStr.length > 500) bodyStr = bodyStr.substring(0, 500) + '...';
+        // Response is scrollable; keep complete evidence for debugging.
         html += '<div class="mb-3">'
           + '<p class="font-semibold text-gray-600 mb-1">\u54cd\u5e94\u4f53</p>'
           + '<pre class="bg-white p-2 rounded border border-gray-200 overflow-x-auto max-h-32">' + window.App.utils.escapeHtml(bodyStr) + '</pre>'
@@ -369,18 +430,21 @@
 
   page.startPolling = function () {
     if (page.pollTimer) clearInterval(page.pollTimer);
+    var runId = page.runId;
     page.pollTimer = setInterval(function () {
-      window.App.api.get('/api/runs/' + page.runId)
+      window.App.api.get('/api/runs/' + runId, {showLoading: false})
         .then(function (data) {
+          if (page.runId !== runId || window.location.hash !== '#/runs/' + runId) return;
           page.runData = data;
           page.cases = data.cases || page.cases;
           page.renderRun();
           page.loadResults();
-          if (data.status === 'done' || data.status === 'failed') {
+          if (!isActive(data.status)) {
             page.stopPolling();
             page.isDone = true;
+            page.closeWebSocket();
           }
-        });
+        }).catch(function () {});
     }, 2000);
   };
 
@@ -410,6 +474,7 @@
       };
 
       socket.onmessage = function (event) {
+        if (page.ws !== socket || window.location.hash !== '#/runs/' + page.runId) return;
         var msg;
         try {
           msg = JSON.parse(event.data);
@@ -438,7 +503,7 @@
         if (page.isDone) return;
         if (page.wsRetries < page.maxWsRetries) {
           page.wsRetries++;
-          setTimeout(function () { page.connectWebSocket(); }, 3000);
+          page.reconnectTimer = setTimeout(function () { page.connectWebSocket(); }, 3000);
         } else {
           console.warn('WS max retries (' + page.maxWsRetries + ') reached, falling back to polling');
           page.startPolling();
@@ -457,6 +522,8 @@
   };
 
   page.closeWebSocket = function () {
+    clearTimeout(page.reconnectTimer);
+    if (page.ws) { page.ws.onclose = null; page.ws.onmessage = null; }
     if (page.ws) {
       try { page.ws.close(); } catch (e) { /* ignore */ }
       page.ws = null;
@@ -465,50 +532,10 @@
   };
 
   page.appendCaseResult = function (data) {
-    var container = document.getElementById('case-results');
-    // Remove "no results" placeholder
-    if (container.querySelector('.text-gray-400')) {
-      container.innerHTML = '';
-    }
-
-    var statusDot = data.status === 'pass' ? 'bg-green-500'
-      : data.status === 'fail' ? 'bg-red-500'
-      : 'bg-yellow-500';
-    var durationText = data.duration_ms ? (data.duration_ms / 1000).toFixed(2) + 's' : '-';
-
-    var div = document.createElement('div');
-    div.className = 'bg-white rounded-lg border border-gray-200 overflow-hidden';
-
-    var header = document.createElement('div');
-    header.className = 'flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-gray-50 transition-colors';
-    header.innerHTML = '<div class="flex items-center gap-2">'
-      + '<span class="inline-block w-2 h-2 rounded-full ' + statusDot + '"></span>'
-      + '<span class="text-sm font-medium text-gray-800">' + window.App.utils.escapeHtml(data.case_name || 'Case #' + data.case_id) + '</span>'
-      + '</div>'
-      + '<div class="flex items-center gap-3">'
-      + '<span class="text-xs text-gray-500">' + durationText + '</span>'
-      + '<svg class="w-4 h-4 text-gray-400 transform transition-transform expand-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>'
-      + '</div>';
-
-    header.addEventListener('click', function () {
-      var detail = this.nextElementSibling;
-      var icon = this.querySelector('.expand-icon');
-      if (detail.classList.contains('hidden')) {
-        detail.classList.remove('hidden');
-        icon.style.transform = 'rotate(180deg)';
-      } else {
-        detail.classList.add('hidden');
-        icon.style.transform = 'rotate(0deg)';
-      }
-    });
-
-    var detail = document.createElement('div');
-    detail.className = 'hidden px-4 py-3 border-t border-gray-100 bg-gray-50 text-xs';
-    detail.innerHTML = page.renderResultDetail({ detail: data.detail, status: data.status, duration_ms: data.duration_ms });
-
-    div.appendChild(header);
-    div.appendChild(detail);
-    container.appendChild(div);
+    var index = page.results.findIndex(function (r) { return r.case_id === data.case_id; });
+    if (index < 0) page.results.push(data);
+    else page.results[index] = data;
+    page.renderResults();
   };
 
   page.updateProgress = function (data) {
@@ -518,6 +545,7 @@
   };
 
   page.setRunDone = function (data) {
+    var runId = page.runId;
     page.isDone = true;
     page.stopPolling();
     page.closeWebSocket();
@@ -532,6 +560,7 @@
     // Re-fetch full run data from standalone endpoint
     window.App.api.get('/api/runs/' + page.runId)
       .then(function (fullData) {
+        if (page.runId !== runId || window.location.hash !== '#/runs/' + runId) return;
         page.runData = fullData;
         page.cases = fullData.cases || page.cases;
         page.renderRun();
@@ -542,8 +571,8 @@
 
   // Cleanup on navigation
   window.addEventListener('hashchange', function () {
-    page.closeWebSocket();
-  }, { once: true });
+    if (window.location.hash !== '#/runs/' + page.runId) page.closeWebSocket();
+  });
 
   window.App = window.App || {};
   window.App.runDetail = page;

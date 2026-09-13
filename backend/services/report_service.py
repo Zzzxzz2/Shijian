@@ -1,6 +1,9 @@
 """Report generation service: produces HTML test run reports."""
 
 import json
+from types import SimpleNamespace
+from services.run_history import public_snapshot
+from services.http_security import redact_data
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -46,6 +49,9 @@ async def generate_run_report(run_id: int) -> str:
         )
         for c in link_rows:
             cases[c.id] = c
+        snapshot = public_snapshot(run)
+        if snapshot:
+            cases = {c["id"]: SimpleNamespace(**c) for c in snapshot["cases"]}
 
         # Parse summary
         try:
@@ -74,7 +80,7 @@ async def generate_run_report(run_id: int) -> str:
             "error": "#ca8a04",
         }.get(r.status, "#6b7280")
 
-        detail = r.detail or {}
+        detail = redact_data(r.detail or {})
         assertions_html = ""
         for a in detail.get("assertions", []):
             rule = a.get("rule", {})
@@ -101,6 +107,11 @@ async def generate_run_report(run_id: int) -> str:
                 f'<p style="margin:4px 0;color:#374151">Status: {detail.get("status_code","-")}</p>'
             )
 
+        evidence = ""
+        if detail.get("steps"):
+            evidence += '<h3>步骤证据</h3><pre>' + _escape(json.dumps(detail["steps"], ensure_ascii=False, indent=2)) + '</pre>'
+        if "response_body" in detail:
+            evidence += '<details><summary>完整响应</summary><pre>' + _escape(json.dumps(detail["response_body"], ensure_ascii=False, indent=2)) + '</pre></details>'
         duration_str = f"{r.duration_ms:.0f}ms" if r.duration_ms else "-"
 
         result_rows += f"""
@@ -115,6 +126,7 @@ async def generate_run_report(run_id: int) -> str:
             <div style="padding:12px 16px;font-size:0.9em">
                 {error_html}
                 {response_info}
+                {evidence}
                 <table style="width:100%;border-collapse:collapse;margin-top:8px">
                     <thead><tr style="background:#f3f4f6">
                         <th style="padding:4px 8px;text-align:left">结果</th>
@@ -128,6 +140,8 @@ async def generate_run_report(run_id: int) -> str:
             </div>
         </div>"""
 
+    snapshot_html = '<details><summary>执行输入快照（常见凭据已隐藏）</summary><pre>' + _escape(json.dumps(snapshot, ensure_ascii=False, indent=2)) + '</pre></details>' if snapshot else '<p>历史记录未保存执行快照。</p>'
+    lifecycle_html = '<p>状态：' + _escape(run.status) + ' · 未完成：' + str(summary.get("skipped", 0)) + '</p><p>' + _escape(run.termination_reason or '') + '</p>'
     html = f"""<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -136,6 +150,8 @@ async def generate_run_report(run_id: int) -> str:
 <title>Test Run Report #{run_id}</title>
 <style>
   body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; padding: 24px; background: #f3f4f6; color: #111827; }}
+  pre {{ white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }}
+  @media print {{ body {{ background: white; }} .summary-card {{ break-inside: avoid; }} }}
   .container {{ max-width: 800px; margin: 0 auto; }}
   h1 {{ font-size: 1.5rem; margin: 0 0 4px; }}
   .meta {{ color: #6b7280; font-size: 0.9em; margin-bottom: 20px; }}
@@ -146,11 +162,12 @@ async def generate_run_report(run_id: int) -> str:
   .pass {{ color: #16a34a; }} .fail {{ color: #dc2626; }} .error {{ color: #ca8a04; }} .total {{ color: #111827; }}
   .result-box {{ border: 1px solid #e5e7eb; border-radius: 8px; margin-bottom: 12px; overflow: hidden; }}
   .result-header {{ display: flex; justify-content: space-between; padding: 12px 16px; background: #f9fafb; }}
+  @media (max-width: 600px) {{ .summary {{ grid-template-columns: repeat(2, 1fr); }} body {{ padding: 12px; }} }}
 </style>
 </head>
 <body>
 <div class="container">
-    <h1>Test Run Report #{run_id}</h1>
+    <h1>试剑 V3 · 执行报告 #{run_id}</h1>
     <p class="meta">
         开始: {_escape(started.strftime("%Y-%m-%d %H:%M:%S"))} &nbsp;|&nbsp;
         结束: {_escape(finished.strftime("%Y-%m-%d %H:%M:%S"))} &nbsp;|&nbsp;
@@ -158,6 +175,8 @@ async def generate_run_report(run_id: int) -> str:
         结果: {"通过" if run.result == "pass" else "失败"}
     </p>
 
+    {lifecycle_html}
+    {snapshot_html}
     <div class="summary">
         <div class="summary-card"><div class="num total">{total}</div><div class="label">总数</div></div>
         <div class="summary-card"><div class="num pass">{passed}</div><div class="label">通过</div></div>

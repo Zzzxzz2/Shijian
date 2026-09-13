@@ -295,6 +295,8 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 
 ### PUT /api/tasks/{id}/status — 状态流转
 
+仅任务所有者或管理员可操作，其他已登录用户返回 `403`，未登录返回 `401`。非法流转返回 `400`，不会改变原状态。
+
 **请求格式：**
 
 | 字段 | 类型 | 约束 |

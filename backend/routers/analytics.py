@@ -100,6 +100,7 @@ async def page_enter(data: PageViewEnter, request: Request, db: AsyncSession = D
 # ══════════════════════════════════════════════════════════════════════════
 
 
+@router.post("/leave/{view_id}")  # sendBeacon always sends POST
 @router.put("/leave/{view_id}")
 @db_retry()
 async def page_leave(view_id: int, data: PageViewUpdate, db: AsyncSession = Depends(get_db)):

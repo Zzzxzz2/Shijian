@@ -75,3 +75,6 @@ body {
   0% { background-position: 200% 0; }
   100% { background-position: -200% 0; }
 }
+
+/* A dedicated parent lets Chart.js resize without stretching or clipping. */
+.chart-plot { position: relative; height: 220px; }

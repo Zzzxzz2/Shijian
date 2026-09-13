@@ -1,53 +1,53 @@
 # 试剑 V3
 
-面向个人开发者和小型团队的 API/UI 自动化测试平台。它把项目、用例、执行、报告、Mock、OpenAPI Schema、Workflow、Contract、安全用例和定时回归放在同一个 FastAPI 应用中，并提供原生 SPA 与独立 React 报告页。
+**把测试设计、执行证据和修复复测串成一个闭环。**
 
-> 当前定位：可复现的作品集与本地测试平台。已验证功能均列在本文中；性能压测执行器仍是预留能力，不计入完成范围。
+面向个人开发者、小型团队和测试工程师作品展示的 API/UI 自动化测试平台。基于 FastAPI，提供原生 SPA 工作台与 React 报告页，可在本地真实执行测试，而不只是管理用例。
 
-> **版本标识：本仓库是试剑 V3，即当前可公开展示、本地部署和持续验证的作品集版本。** V1/V2 仅作为历史演进说明，不在本仓库中单独发布。
+[快速启动](#本地启动) · [权限与状态测试专题](docs/PERMISSION-STATE-TOPIC.md) · [验证记录](docs/STATUS.md) · [架构](docs/ARCHITECTURE.md) · [部署](docs/DEPLOYMENT.md)
 
-## 版本演进
+- **测试设计到执行**：OpenAPI 建立端点基线，保存候选用例，组织 API、UI、Workflow 和 Contract 回归。
+- **失败到复测**：查看请求、响应与断言差异，识别失败类型，只重跑失败用例并对比历史。
+- **可信的执行历史**：输入快照、逐条结果保存、取消、总时限和重启中断恢复，明确区分失败与未完成。
 
-以下 V1/V2 内容根据项目历史记录整理；V3 内容以当前代码、文档和自动化验收结果为准。
+最近一轮本地验证：**493 项后端测试、74 项主 E2E、26 项 React 浏览器测试通过**。React 测试使用模拟 API，真实浏览器验收与功能边界另列于 [STATUS](docs/STATUS.md)，不将不同测试层混为一谈。
 
-### V1 → V2
+## 实际界面
 
-| 维度 | V1 | V2 |
-|---|---|---|
-| 后端 | 少量端点组合 | FastAPI 模块化路由、完整 CRUD、JWT/bcrypt 认证、SQLAlchemy ORM |
-| 前端 | 零散页面 | 完整 SPA：Hash 路由、命名空间 JavaScript 模块、Tailwind UI |
-| 测试 | 没有成体系 | API 执行引擎、httpx 请求、多类断言、Playwright 截图、WebSocket 事件流 |
-| AI | 无 | DeepSeek 生成测试计划、文档上传与解析 |
-| 部署 | 无 | Docker 与 Podman Compose |
-| Token 统计 | 无 | `TokenUsageLog` 及多维度聚合展示 |
+以下为实际运行截图，使用隔离数据库与合成演示数据；未修改页面统计值。端点覆盖表示已有保存用例，**不代表通过率或代码覆盖率**。
 
-### V2 → V3（当前版本）
+**覆盖率与执行趋势**：14 个 OpenAPI 端点中，10 个已有用例；可查看待补齐端点和各次真实执行结果。
 
-| 维度 | V2 | V3 当前实现 |
-|---|---|---|
-| 执行能力 | API / UI / Perf 用例模型 | API 和 UI 可执行；API 内容扩展 Workflow，Contract 通过 `schema_match` 断言实现；Mock/Schema/Security 是生成或运行时引擎。Perf 仍是占位执行器 |
-| 测试集 | 无 | Suite CRUD、用例分组和一键执行 |
-| 定时回归 | 无 | Cron 表达式、APScheduler 持久化调度和手动触发 |
-| 历史对比 | 无 | TestRun diff：`regression` / `fixed` / `unchanged` / `new` |
-| 权限 | 系统级 admin/user | 系统角色 + 项目级 owner/editor/viewer，并校验跨项目资源隔离 |
-| Mock | 无 | 录制、请求匹配、回放、编辑、启停、转用例和删除 |
-| LLM | 仅 DeepSeek | DeepSeek、OpenAI、Claude、Gemini、Ollama，支持 failover 链和无 Key 时的 Mock fallback |
-| 即时执行 | 无 | Quick Test：自然语言生成计划、后台执行、WebSocket 事件流 |
-| 失败分类 | 无 | 6 类结构化 `failure_category`：超时、连接、执行、内部、非预期状态和断言失败 |
-| 覆盖率 | 无 | React + Chart.js 的 Schema/Simple 双模式仪表盘 |
-| Trace 回放 | 无 | Playwright 截图和 `trace.zip`，报告页提供鉴权下载 |
-| React 报告 | 无 | 独立 React 18 报告/覆盖率页，Chart.js + HashRouter，支持 `/report/{run_id}` 直访 |
-| 演示靶场 | 无 | 内置 16 个路由声明，覆盖认证、任务 CRUD、上传、慢请求、管理员与错误码场景 |
-| 管理员面板 | 基础能力 | 系统统计、用户管理、角色修改、强制登出和全项目列表 |
-| 个人中心 | 无 | 资料修改、密码修改、通知配置预留 |
-| 导入导出 | 无 | JSON 用例导入导出，支持类型/标签筛选与部分失败返回 |
-| 文档 | 无统一口径 | README + 产品范围、架构、API、部署、测试、状态和安全文档 |
-| CI | 无 | GitHub Actions：Python 编译/测试、Chromium 安装、React 构建、Compose 校验和三镜像构建 |
-| 发布安全 | 凭据与 Git 生成物治理不完整 | 公共仓库已清理凭据/运行产物，Compose 三服务，生产 JWT/AES 密钥缺失时 fail-fast；当前仍是单实例 SQLite，不宣称分布式生产能力 |
+![Schema 覆盖率、用例分布和执行趋势](docs/images/coverage.png)
 
-![项目列表](docs/images/projects.png)
+<details>
+<summary>查看用例工作台、失败报告、Workflow 证据与项目总览</summary>
 
-![执行报告](docs/images/run-report.png)
+**用例工作台**：按权限标签筛选，组织正向与负向场景，配置执行时限。
+
+![权限专题用例工作台](docs/images/project-cases.png)
+
+**失败定位**：主动注入 HTTP 503 的故障演练，展示预期 200 与实际 503 的差异；不是将演示故障冒充真实产品缺陷。
+
+![HTTP 503 故障演练的失败报告](docs/images/run-report.png)
+
+**Workflow 证据**：登录、创建任务、状态流转逐步验证，按需展开请求、响应和断言。
+
+![Workflow 状态流转与逐步断言](docs/images/workflow-report.png)
+
+**项目总览**：从定义测试范围到执行定位、验证修复，串联完整流程。
+
+![整理后的演示项目总览](docs/images/projects.png)
+
+</details>
+
+截图来源、数据口径和建议演示顺序见 [展示说明](docs/SHOWCASE.md)。
+
+## 值得展示的测试闭环
+
+1. **Schema → 保存 → 执行 → 定位 → 失败重跑 → 历史对比**。候选用例需要补充真实参数与认证，不能把自动生成当成已验证。
+2. **权限与状态专题**：13 条 Workflow，从 4 条失败发现两个根因，修复后失败复测 4/4、全专题 13/13。详见 [专题证据](docs/PERMISSION-STATE-TOPIC.md)。
+3. **平台自身可靠性**：取消和超时保留部分结果；强制终止服务后恢复为中断；编辑用例不改变旧快照。详见 [可靠性说明](docs/RELIABILITY.md)。
 
 ## 已验证功能
 
@@ -183,9 +183,9 @@ python tests/e2e_regression.py
 
 ## 安全说明
 
-- `.env`、数据库、日志、上传文件、截图、MCP 本机配置和依赖目录均被 Git/Docker 排除。
-- `ENV=production` 时必须提供 JWT secret 和 32 字节 AES Key，否则应用明确拒绝相关不安全配置。
-- 旧开发目录中曾出现过 QQ SMTP 授权码；该授权已由所有者撤销。本公共目录从未包含该值。
+- `.env`、数据库、日志、上传文件、原始截图、MCP 本机配置和依赖目录被排除；仅 `docs/images` 中已检查的展示截图公开提交。
+- `ENV=production` 时拒绝过短、示例或开发 JWT 密钥，并在启动时校验 32 字节 AES Key；开发全零密钥不可用于生产。
+- 发布前已检查待提交文件、可达历史与展示截图；范围及限制见 [公开发布审查](docs/PUBLICATION-AUDIT-2026-09-13.md)。
 - 邮件功能默认关闭。需要时只在本地或部署环境的 `.env` 中设置 `QQ_*` 变量，严禁提交授权码。
 - 演示靶场故意包含可测试的错误与安全场景；Compose 默认只绑定 `127.0.0.1:8003`，不得改为公网监听。
 - 原生 SPA 使用仓库内生成的 `frontend/assets/tailwind.css`，不在运行时加载第三方 CSS 脚本。
@@ -208,6 +208,51 @@ python tests/e2e_regression.py
 - [测试](docs/TESTING.md)
 - [当前状态](docs/STATUS.md)
 - [贡献指南](CONTRIBUTING.md)
+
+<details>
+<summary>版本演进：V1 / V2 / V3</summary>
+
+## 版本演进
+
+以下 V1/V2 内容根据项目历史记录整理；V3 内容以当前代码、文档和自动化验收结果为准。
+
+### V1 → V2
+
+| 维度 | V1 | V2 |
+|---|---|---|
+| 后端 | 少量端点组合 | FastAPI 模块化路由、完整 CRUD、JWT/bcrypt 认证、SQLAlchemy ORM |
+| 前端 | 零散页面 | 完整 SPA：Hash 路由、命名空间 JavaScript 模块、Tailwind UI |
+| 测试 | 没有成体系 | API 执行引擎、httpx 请求、多类断言、Playwright 截图、WebSocket 事件流 |
+| AI | 无 | DeepSeek 生成测试计划、文档上传与解析 |
+| 部署 | 无 | Docker 与 Podman Compose |
+| Token 统计 | 无 | `TokenUsageLog` 及多维度聚合展示 |
+
+### V2 → V3（当前版本）
+
+| 维度 | V2 | V3 当前实现 |
+|---|---|---|
+| 执行能力 | API / UI / Perf 用例模型 | API 和 UI 可执行；API 内容扩展 Workflow，Contract 通过 `schema_match` 断言实现；Mock/Schema/Security 是生成或运行时引擎。Perf 仍是占位执行器 |
+| 测试集 | 无 | Suite CRUD、用例分组和一键执行 |
+| 定时回归 | 无 | Cron 表达式、APScheduler 持久化调度和手动触发 |
+| 历史对比 | 无 | TestRun diff：`regression` / `fixed` / `unchanged` / `new` |
+| 权限 | 系统级 admin/user | 系统角色 + 项目级 owner/editor/viewer，并校验跨项目资源隔离 |
+| Mock | 无 | 录制、请求匹配、回放、编辑、启停、转用例和删除 |
+| LLM | 仅 DeepSeek | DeepSeek、OpenAI、Claude、Gemini、Ollama，支持 failover 链和无 Key 时的 Mock fallback |
+| 即时执行 | 无 | Quick Test：自然语言生成计划、后台执行、WebSocket 事件流 |
+| 失败分类 | 无 | 6 类结构化 `failure_category`：超时、连接、执行、内部、非预期状态和断言失败 |
+| 覆盖率 | 无 | React + Chart.js 的 Schema/Simple 双模式仪表盘 |
+| Trace 回放 | 无 | Playwright 截图和 `trace.zip`，报告页提供鉴权下载 |
+| React 报告 | 无 | 独立 React 18 报告/覆盖率页，Chart.js + HashRouter，支持 `/report/{run_id}` 直访 |
+| 演示靶场 | 无 | 内置 16 个路由声明，覆盖认证、任务 CRUD、上传、慢请求、管理员与错误码场景 |
+| 管理员面板 | 基础能力 | 系统统计、用户管理、角色修改、强制登出和全项目列表 |
+| 个人中心 | 无 | 资料修改、密码修改、通知配置预留 |
+| 导入导出 | 无 | JSON 用例导入导出，支持类型/标签筛选与部分失败返回 |
+| 文档 | 无统一口径 | README + 产品范围、架构、API、部署、测试、状态和安全文档 |
+| CI | 无 | GitHub Actions：Python 编译/测试、Chromium 安装、React 构建、Compose 校验和三镜像构建 |
+| 发布安全 | 凭据与 Git 生成物治理不完整 | 公共仓库已清理凭据/运行产物，Compose 三服务，生产 JWT/AES 密钥缺失时 fail-fast；当前仍是单实例 SQLite，不宣称分布式生产能力 |
+
+
+</details>
 
 ## 许可证
 

@@ -86,8 +86,24 @@
     <button class="tab-btn px-5 py-2.5 text-sm font-medium transition-colors text-gray-500 hover:text-gray-700" data-tab="runs">执行历史</button>
     <button class="tab-btn px-5 py-2.5 text-sm font-medium transition-colors text-gray-500 hover:text-gray-700" data-tab="schedules">定时调度</button>
     <button class="tab-btn px-5 py-2.5 text-sm font-medium transition-colors text-gray-500 hover:text-gray-700" data-tab="docs">文档</button>
+    <button class="tab-btn px-5 py-2.5 text-sm font-medium text-gray-500" data-tab="schema">Schema / 覆盖率</button>
   </div>
 
+  <div id="tab-schema" class="tab-content hidden">
+    <h2 class="text-lg font-bold mb-2">OpenAPI · 端点覆盖</h2>
+    <p class="text-sm text-gray-500 mb-4">解析会更新本项目的端点基线。选择生成的用例保存，再回到测试用例执行。覆盖表示已有用例，不代表接口已通过测试。</p>
+    <p id="schema-coverage" role="status" class="text-sm mb-4"></p>
+    <label for="schema-spec" class="block text-sm font-medium mb-2">OpenAPI JSON</label>
+    <textarea id="schema-spec" rows="9" class="w-full p-3 border rounded-lg font-mono text-xs" placeholder='{"openapi":"3.0.0","paths":{...}}' spellcheck="false"></textarea>
+    <div class="flex items-center gap-3 my-4">
+      <label for="schema-mode" class="text-sm">生成模式</label>
+      <select id="schema-mode" class="border rounded-lg px-3 py-2 text-sm"><option value="coverage">基础端点</option><option value="fuzz">边界值</option><option value="security">安全输入</option><option value="all">全部模式</option></select>
+      <button id="schema-parse" class="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm">解析并更新基线</button>
+      <button id="schema-save" disabled class="px-3 py-2 border rounded-lg text-sm">保存选中用例</button>
+    </div>
+    <div id="schema-preview" class="space-y-2"></div>
+    <details class="my-4"><summary>端点覆盖明细</summary><div id="schema-endpoints" class="text-sm mt-3"></div></details>
+  </div>
   <!-- Cases tab content -->
   <div id="tab-cases" class="tab-content">
     <div class="flex items-center justify-between mb-4">
@@ -105,7 +121,8 @@
         </select>
         <button id="execute-by-tag-btn" disabled
           class="px-3 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors">按标签执行</button>
-        <button id="execute-cases-btn" disabled
+        <label class="text-sm text-gray-600" for="run-timeout">总时限（秒） <input id="run-timeout" type="number" min="1" max="3600" value="300" class="border rounded-lg px-2 py-1 w-20"></label>
+      <button id="execute-cases-btn" disabled
           class="px-3 py-1.5 text-sm bg-green-600 hover:bg-green-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors">执行选中用例</button>
         <button id="batch-delete-cases-btn" disabled
           class="px-3 py-1.5 text-sm bg-red-600 hover:bg-red-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-lg transition-colors">删除选中</button>
@@ -129,6 +146,7 @@
         <tbody id="case-list"><tr><td colspan="6" class="text-center py-12 text-gray-400">加载中...</td></tr></tbody>
       </table>
     </div>
+    <div class="flex justify-center items-center gap-3 mt-4 text-sm"><button id="case-prev" class="border rounded px-3 py-1">上一页</button><span id="case-page"></span><button id="case-next" class="border rounded px-3 py-1">下一页</button></div>
   </div>
 
   <!-- Runs tab content -->
@@ -144,6 +162,7 @@
         <tbody id="run-list"><tr><td colspan="4" class="text-center py-12 text-gray-400">加载中...</td></tr></tbody>
       </table>
     </div>
+    <div class="flex justify-center items-center gap-3 mt-4 text-sm"><button id="run-prev" class="border rounded px-3 py-1">上一页</button><span id="run-page"></span><button id="run-next" class="border rounded px-3 py-1">下一页</button></div>
   </div>
 
   <!-- Schedules tab content -->
@@ -259,6 +278,11 @@
       <div>
         <label class="block text-sm font-medium text-gray-600 mb-1">标签 <span class="text-gray-400 font-normal">(逗号分隔)</span></label>
         <input id="cm-tags" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm" placeholder="smoke, login, critical" />
+      </div>
+      <div id="cm-raw-section" class="hidden">
+        <label for="cm-raw-content" class="block text-sm font-medium">高级用例内容（JSON）</label>
+        <p class="text-xs text-gray-500">Workflow、Contract 和已有 Perf 用例使用此完整内容保存；下方结构化字段仅供参考。保留步骤、变量、Schema 与扩展配置。</p>
+        <textarea id="cm-raw-content" rows="12" class="w-full border rounded-lg p-3 font-mono text-xs" spellcheck="false"></textarea>
       </div>
       <div id="cm-api-fields">
         <div class="grid grid-cols-4 gap-3">

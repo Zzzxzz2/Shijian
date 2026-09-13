@@ -43,9 +43,9 @@ async def list_cases(
 
     base = select(TestCase).where(TestCase.project_id == pid)
     if test_type:
-        base = base.where(TestCase.test_type == test_type)
+        base = base.where(func.lower(TestCase.test_type) == test_type.lower())
     if tag:
-        base = base.where(TestCase.tags.cast(String).contains(tag))
+        base = base.where(TestCase.tags.cast(String).contains(json.dumps(tag), autoescape=True))
 
     total = (await db.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
     rows = (
@@ -228,9 +228,9 @@ async def export_cases(
 
     base = select(TestCase).where(TestCase.project_id == pid)
     if test_type:
-        base = base.where(TestCase.test_type == test_type)
+        base = base.where(func.lower(TestCase.test_type) == test_type.lower())
     if tag:
-        base = base.where(TestCase.tags.cast(String).contains(tag))
+        base = base.where(TestCase.tags.cast(String).contains(json.dumps(tag), autoescape=True))
 
     rows = (
         (await db.execute(base.order_by(TestCase.id)))

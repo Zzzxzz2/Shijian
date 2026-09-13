@@ -1,3 +1,4 @@
+import { apiDate } from '../../lib/date';
 import { Line } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -28,13 +29,16 @@ export default function ExecutionTrendChart({ runs }) {
 
   // Compute pass rate for each run
   const items = runs
+    .slice().reverse() // API returns newest first; time runs left to right in the chart.
     .filter((r) => r.summary)
     .map((r) => {
-      const s = typeof r.summary === 'string' ? JSON.parse(r.summary) : r.summary;
-      const total = (s.pass || 0) + (s.fail || 0);
+      let s;
+      try { s = typeof r.summary === 'string' ? JSON.parse(r.summary) : r.summary; } catch { s = {}; }
+      s = s || {};
+      const total = s.total ?? ((s.pass || 0) + (s.fail || 0) + (s.error || 0) + (s.skipped || 0));
       const passRate = total > 0 ? ((s.pass || 0) / total) * 100 : 0;
       return {
-        label: r.created_at ? new Date(r.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '-',
+        label: `#${r.id} · ${r.created_at ? apiDate(r.created_at).toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }) : '-'}`,
         passRate: Math.round(passRate * 10) / 10,
         total,
       };
@@ -62,7 +66,7 @@ export default function ExecutionTrendChart({ runs }) {
 
   const options = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     interaction: {
       intersect: false,
       mode: 'index',
@@ -108,7 +112,7 @@ export default function ExecutionTrendChart({ runs }) {
   return (
     <div className="chart-container">
       <h3 className="text-sm font-medium text-gray-400 mb-3">执行趋势</h3>
-      <Line data={data} options={options} />
+      <div className="chart-plot"><Line data={data} options={options} /></div>
     </div>
   );
 }

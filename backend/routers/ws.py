@@ -61,7 +61,7 @@ async def websocket_run(websocket: WebSocket, run_id: int, token: str = Query(..
             return
 
         # If run already done, send final status and close
-        if run.status in ("done", "failed"):
+        if run.status not in ("queued", "pending", "running"):
             await websocket.accept()
             await websocket.send_json({
                 "type": "run_done",

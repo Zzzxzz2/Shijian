@@ -24,7 +24,7 @@ export default function CoveragePieChart({ covered, uncovered }) {
 
   const options = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     cutout: '65%',
     plugins: {
       legend: {
@@ -54,9 +54,9 @@ export default function CoveragePieChart({ covered, uncovered }) {
   return (
     <div className="chart-container">
       <h3 className="text-sm font-medium text-gray-400 mb-3">API 覆盖率</h3>
-      <div className="relative flex items-center justify-center">
+      <div className="chart-plot">
         <Doughnut data={data} options={options} />
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <div className="absolute inset-0 pb-8 flex items-center justify-center pointer-events-none">
           <div className="text-center">
             <span className="text-2xl font-bold text-gray-100">{pct}%</span>
           </div>

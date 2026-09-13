@@ -36,8 +36,9 @@
         if (resp.status === 401) {
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          localStorage.removeItem('guest');
           window.App.router.navigate('/login');
-          return Promise.reject(new Error('未登录或登录已过期'));
+          return Promise.reject({status: 401, detail: path === '/api/auth/login' ? '用户名或密码错误' : '未登录或登录已过期'});
         }
         // 204 No Content — no body to parse
         if (resp.status === 204) {
@@ -45,7 +46,7 @@
         }
         return resp.json().then(function (json) {
           if (!resp.ok) {
-            var detail = json.detail || (json.detail && json.detail[0] && json.detail[0].msg) || '请求失败';
+            var detail = Array.isArray(json.detail) ? json.detail.map(function (item) { return (item.loc || []).slice(1).join('.') + ': ' + item.msg; }).join('；') : (json.detail || '请求失败');
             return Promise.reject({ status: resp.status, detail: detail, body: json });
           }
           return json;

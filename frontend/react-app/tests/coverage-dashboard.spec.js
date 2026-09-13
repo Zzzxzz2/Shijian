@@ -45,7 +45,7 @@ test.describe('正常路径', () => {
     // 4 chart headings (each is an <h3>)
     await expect(page.locator('h3:has-text("API 覆盖率")')).toBeVisible();
     await expect(page.locator('h3:has-text("用例分布")')).toBeVisible();
-    await expect(page.locator('h3:has-text("参数覆盖")')).toBeVisible();
+    await expect(page.locator('h3:has-text("测试类型数量")')).toBeVisible();
     await expect(page.locator('h3:has-text("执行趋势")')).toBeVisible();
 
     // 3 stat cards
@@ -126,7 +126,7 @@ test.describe('正常路径', () => {
 
     // Schema-specific headings NOT visible
     await expect(page.locator('h3:has-text("用例分布")')).toHaveCount(0);
-    await expect(page.locator('h3:has-text("参数覆盖")')).toHaveCount(0);
+    await expect(page.locator('h3:has-text("测试类型数量")')).toHaveCount(0);
   });
 
   test('COV-006: 执行趋势折线图渲染', async ({ page }) => {
@@ -383,7 +383,7 @@ test.describe('异常场景', () => {
 
   test('COV-204: 网络断连 → 不崩溃', async ({ page }) => {
     // Abort all API requests to simulate network failure
-    await page.route('**/api/projects/*', async (route) => {
+    await page.route('**/api/projects/**', async (route) => {
       await route.abort('connectionrefused');
     });
 
@@ -482,4 +482,32 @@ test.describe('权限/认证', () => {
     // Not white screen
     await expect(page.locator('text=覆盖率仪表盘')).toBeVisible({ timeout: 15000 });
   });
+});
+
+
+test('REPORT-001: 过期登录恢复后直达报告，不停留在空白 Navigate', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('token', 'expired-token'));
+  let loggedIn = false;
+  await page.route('**/api/auth/me', route => route.fulfill({status: loggedIn ? 200 : 401, json: loggedIn ? {id:1} : {detail:'Expired'}}));
+  await page.route('**/api/auth/login', route => { loggedIn = true; return route.fulfill({json:{access_token:'valid-token', user:{id:1}}}); });
+  const run = {id:28, project_id:1, status:'done', summary:JSON.stringify({pass:1, fail:0, error:0}), cases:[]};
+  await page.route('**/api/runs/28', route => route.fulfill({json:run}));
+  await page.route('**/api/projects/1/runs/28', route => route.fulfill({json:run}));
+  await page.route('**/api/projects/1/runs/28/results', route => route.fulfill({json:[]}));
+  await page.goto('/report/28');
+  await expect(page.getByRole('heading', {name:'登录查看报告'})).toBeVisible();
+  await page.getByLabel('用户名').fill('review');
+  await page.getByLabel('密码').fill('test');
+  await page.getByRole('button', {name:'登录', exact:true}).click();
+  await expect(page.getByRole('heading', {name:/执行/}).first()).toBeVisible();
+  await expect(page).toHaveURL(/#\/projects\/1\/runs\/28$/);
+});
+
+
+test('COV-107: 中断执行的通过率包含未完成用例', async ({ page }) => {
+  const runs = {items: [{id: 1, status: 'cancelled', summary: {total: 10, pass: 6, fail: 0, error: 0, skipped: 4}, created_at: '2026-09-13T00:00:00'}], total: 1};
+  await mockApi(page, simpleCoverageData(), statsData(), runs);
+  await page.goto(ROUTE);
+  const value = page.locator('p:has-text("末次通过率")').locator('..').locator('span.text-2xl');
+  await expect(value).toHaveText('60%');
 });

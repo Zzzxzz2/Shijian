@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import CoveragePage from './pages/CoveragePage';
 import RunDetailPage from './pages/RunDetailPage';
 import api from './lib/api';
@@ -13,7 +13,9 @@ function DirectReport({ runId }) {
 
   useEffect(() => {
     if (!authenticated) return;
-    api.get(`/api/runs/${runId}`)
+    setError('');
+    api.get('/api/auth/me', { skipAuthRedirect: true })
+      .then(() => api.get(`/api/runs/${runId}`, { skipAuthRedirect: true }))
       .then((run) => setProjectId(run.project_id))
       .catch((e) => {
         if (e?.status === 401) setAuthenticated(false);
@@ -25,7 +27,7 @@ function DirectReport({ runId }) {
     event.preventDefault();
     setError('');
     try {
-      const data = await api.post('/api/auth/login', { username, password });
+      const data = await api.post('/api/auth/login', { username, password }, { skipAuthRedirect: true });
       localStorage.setItem('token', data.access_token);
       localStorage.setItem('user', JSON.stringify(data.user));
       setAuthenticated(true);
@@ -60,7 +62,8 @@ function LoginRequired() {
 }
 
 export default function App() {
-  const directReport = !window.location.hash && window.location.pathname.match(/^\/report\/(\d+)\/?$/);
+  const location = useLocation();
+  const directReport = location.pathname === '/' && window.location.pathname.match(/^\/report\/(\d+)\/?$/);
   if (directReport) return <DirectReport runId={directReport[1]} />;
 
   return (

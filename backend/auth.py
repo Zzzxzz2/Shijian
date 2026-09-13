@@ -54,7 +54,7 @@ async def authenticate_token(token: str, db: AsyncSession) -> User | None:
     """Return the active user represented by *token*, or ``None``."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        if payload.get("guest"):
+        if payload.get("guest") or payload.get("purpose"):
             return None
         user_id_str: str | None = payload.get("sub")
         if user_id_str is None:

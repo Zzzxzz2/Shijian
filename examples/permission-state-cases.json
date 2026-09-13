@@ -1,0 +1,1378 @@
+{
+  "description": "仅用于自带本地靶场。qa_topic_owner/other 为公开测试账号。先运行 scripts/run_permission_state_topic.py 初始化账号，或自行注册。",
+  "cases": [
+    {
+      "name": "AUTH-01 · 未登录不能读取任务",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "认证"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "匿名列表",
+            "method": "GET",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 401
+              }
+            ]
+          }
+        ],
+        "test_design": {
+          "id": "AUTH-01",
+          "rule": "认证边界：无 Token 返回 401",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "AUTH-02 · 所有者可修改任务",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "权限"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "修改标题",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "title",
+                "operator": "eq",
+                "expected": "修改后的标题"
+              }
+            ],
+            "body": {
+              "title": "修改后的标题"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "AUTH-02",
+          "rule": "所属资源允许编辑",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "AUTH-03 · 其他用户不能修改任务",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "权限",
+        "负向"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "登录other",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_other",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "other_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "越权修改",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{other_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 403
+              }
+            ],
+            "body": {
+              "title": "不应生效"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "AUTH-03",
+          "rule": "非所有者编辑返回 403",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "AUTH-04 · 普通用户不能删除任务",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "权限",
+        "负向"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "普通用户删除",
+            "method": "DELETE",
+            "url": "/api/tasks/{{task_id}}",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 403
+              }
+            ]
+          }
+        ],
+        "test_design": {
+          "id": "AUTH-04",
+          "rule": "删除仅管理员允许",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "AUTH-05 · 管理员删除后资源不存在",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "权限"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "登录admin",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "admin",
+              "password": "admin123"
+            },
+            "capture": [
+              {
+                "variable": "admin_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "管理员删除",
+            "method": "DELETE",
+            "url": "/api/tasks/{{task_id}}",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 204
+              }
+            ]
+          },
+          {
+            "name": "确认已删除",
+            "method": "GET",
+            "url": "/api/tasks/{{task_id}}",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{admin_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 404
+              }
+            ]
+          }
+        ],
+        "test_design": {
+          "id": "AUTH-05",
+          "rule": "管理员可删除，随后查询 404",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "AUTH-06 · 普通用户不能访问管理员列表",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "权限",
+        "负向"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "访问管理员接口",
+            "method": "GET",
+            "url": "/api/admin/users",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 403
+              }
+            ]
+          }
+        ],
+        "test_design": {
+          "id": "AUTH-06",
+          "rule": "角色权限边界返回 403",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "AUTH-07 · 其他用户不能改变任务状态",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "权限",
+        "负向"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "登录other",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_other",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "other_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "越权改变状态",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{other_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 403
+              }
+            ],
+            "body": {
+              "status": "doing"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "AUTH-07",
+          "rule": "状态变更与编辑使用相同所有权约束；非所有者返回 403",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "STATE-01 · 完整合法状态链",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "状态"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "转到doing",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "doing"
+              }
+            ],
+            "body": {
+              "status": "doing"
+            }
+          },
+          {
+            "name": "转到done",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "done"
+              }
+            ],
+            "body": {
+              "status": "done"
+            }
+          },
+          {
+            "name": "转到archived",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "archived"
+              }
+            ],
+            "body": {
+              "status": "archived"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "STATE-01",
+          "rule": "todo → doing → done → archived",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "STATE-02 · 不能跳过进行中直接完成",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "状态",
+        "负向"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "非法跳转",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 400
+              }
+            ],
+            "body": {
+              "status": "done"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "STATE-02",
+          "rule": "todo → done 应返回 400",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "STATE-03 · 已完成不能回到进行中",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "状态",
+        "负向"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "转到doing",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "doing"
+              }
+            ],
+            "body": {
+              "status": "doing"
+            }
+          },
+          {
+            "name": "转到done",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "done"
+              }
+            ],
+            "body": {
+              "status": "done"
+            }
+          },
+          {
+            "name": "非法回退",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 400
+              }
+            ],
+            "body": {
+              "status": "doing"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "STATE-03",
+          "rule": "done → doing 应返回 400",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "STATE-04 · 归档不能重新开始",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "状态",
+        "负向"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "转到doing",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "doing"
+              }
+            ],
+            "body": {
+              "status": "doing"
+            }
+          },
+          {
+            "name": "转到done",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "done"
+              }
+            ],
+            "body": {
+              "status": "done"
+            }
+          },
+          {
+            "name": "转到archived",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              },
+              {
+                "type": "json_path",
+                "target": "status",
+                "operator": "eq",
+                "expected": "archived"
+              }
+            ],
+            "body": {
+              "status": "archived"
+            }
+          },
+          {
+            "name": "归档重开",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 400
+              }
+            ],
+            "body": {
+              "status": "doing"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "STATE-04",
+          "rule": "archived → doing 应返回 400",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "STATE-05 · 非法状态值被拒绝",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "状态",
+        "边界"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "非法枚举",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 422
+              }
+            ],
+            "body": {
+              "status": "unknown"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "STATE-05",
+          "rule": "状态枚举边界返回 422",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    },
+    {
+      "name": "STATE-06 · 允许直接归档并重复归档",
+      "test_type": "api",
+      "source": "manual",
+      "skip_auth": true,
+      "tags": [
+        "权限状态专题",
+        "状态",
+        "幂等"
+      ],
+      "content": {
+        "workflow": [
+          {
+            "name": "登录owner",
+            "method": "POST",
+            "url": "/api/login",
+            "headers": {
+              "Content-Type": "application/json"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "username": "qa_topic_owner",
+              "password": "Target-demo-only!"
+            },
+            "capture": [
+              {
+                "variable": "owner_token",
+                "json_path": "access_token"
+              }
+            ]
+          },
+          {
+            "name": "创建自己的任务",
+            "method": "POST",
+            "url": "/api/tasks",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 201
+              }
+            ],
+            "body": {
+              "title": "权限与状态专题",
+              "priority": "medium"
+            },
+            "capture": [
+              {
+                "variable": "task_id",
+                "json_path": "id"
+              }
+            ]
+          },
+          {
+            "name": "直接归档",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "status": "archived"
+            }
+          },
+          {
+            "name": "重复归档",
+            "method": "PUT",
+            "url": "/api/tasks/{{task_id}}/status",
+            "headers": {
+              "Content-Type": "application/json",
+              "Authorization": "Bearer {{owner_token}}"
+            },
+            "assertions": [
+              {
+                "type": "status_code",
+                "operator": "eq",
+                "expected": 200
+              }
+            ],
+            "body": {
+              "status": "archived"
+            }
+          }
+        ],
+        "test_design": {
+          "id": "STATE-06",
+          "rule": "现有靶场规则允许任意状态归档及重复归档",
+          "technique": "权限决策表 / 状态转换 / 负向测试"
+        }
+      }
+    }
+  ]
+}

@@ -22,7 +22,7 @@ export default function CoverageRadarChart({ testsByType }) {
     labels,
     datasets: [
       {
-        label: '测试类型覆盖',
+        label: '用例数量',
         data: values,
         backgroundColor: 'rgba(88, 166, 255, 0.15)',
         borderColor: '#58a6ff',
@@ -38,7 +38,7 @@ export default function CoverageRadarChart({ testsByType }) {
 
   const options = {
     responsive: true,
-    maintainAspectRatio: true,
+    maintainAspectRatio: false,
     scales: {
       r: {
         beginAtZero: true,
@@ -69,8 +69,8 @@ export default function CoverageRadarChart({ testsByType }) {
 
   return (
     <div className="chart-container">
-      <h3 className="text-sm font-medium text-gray-400 mb-3">参数覆盖</h3>
-      <Radar data={data} options={options} />
+      <h3 className="text-sm font-medium text-gray-400 mb-3">测试类型数量</h3>
+      <div className="chart-plot"><Radar data={data} options={options} /></div>
     </div>
   );
 }
